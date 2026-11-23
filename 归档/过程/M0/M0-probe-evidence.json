@@ -1,0 +1,119 @@
+{
+  "createdAt": "2026-11-23T15:39:27.154Z",
+  "runs": [
+    {
+      "phase": 1,
+      "pid": 18136,
+      "at": "2026-11-23T15:39:27.154Z",
+      "steps": [
+        {
+          "n": "Q1 create",
+          "ok": true,
+          "detail": {
+            "sessionId": "worker-m0-probe2",
+            "agentPreset": "standard"
+          }
+        },
+        {
+          "n": "Q1 resolveAgent",
+          "ok": true,
+          "detail": {
+            "id": "worker-m0-probe2"
+          }
+        },
+        {
+          "n": "Q2 prompt",
+          "ok": true,
+          "detail": {
+            "accepted": true
+          }
+        },
+        {
+          "n": "Q3 wait",
+          "ok": true,
+          "detail": {
+            "reason": "idle",
+            "reply": "M0-OK",
+            "outputTruncated": false
+          }
+        },
+        {
+          "n": "Q3 state",
+          "ok": true,
+          "detail": {
+            "cursor": 21,
+            "active": true,
+            "running": false,
+            "queue": [],
+            "pendingInput": []
+          }
+        },
+        {
+          "n": "Q4 cancel",
+          "ok": true,
+          "detail": {
+            "accepted": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": 2,
+      "pid": 13460,
+      "at": "2026-11-23T15:40:50.516Z",
+      "steps": [
+        {
+          "n": "Q1 resolveAgent",
+          "ok": true,
+          "detail": {
+            "id": "worker-m0-probe2"
+          }
+        },
+        {
+          "n": "Q2 prompt",
+          "ok": true,
+          "detail": {
+            "accepted": true
+          }
+        },
+        {
+          "n": "Q3 wait",
+          "ok": true,
+          "detail": {
+            "reason": "idle",
+            "reply": "M0-RESUMED | M0-OK",
+            "outputTruncated": false
+          }
+        },
+        {
+          "n": "Q3 state",
+          "ok": true,
+          "detail": {
+            "cursor": 32,
+            "active": true,
+            "running": false,
+            "queue": [],
+            "pendingInput": []
+          }
+        },
+        {
+          "n": "Q5 history",
+          "ok": true,
+          "detail": {
+            "records": 33,
+            "hasMore": false
+          }
+        },
+        {
+          "n": "Q4 cancel",
+          "ok": true,
+          "detail": {
+            "accepted": true
+          }
+        }
+      ]
+    }
+  ],
+  "phase1Done": true,
+  "done": true
+}

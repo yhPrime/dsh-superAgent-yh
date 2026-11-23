@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "createdAt": 1795448719344,
+  "updatedAt": 1795448885354,
+  "watermark": {
+    "github": "2026-11-23T15:48:05.352Z"
+  },
+  "tickets": {
+    "github:issue-1": {
+      "id": "github:issue-1",
+      "source": "github",
+      "kind": "issue",
+      "thread": "issue-1",
+      "actor": "tester",
+      "title": "创建 hello.txt",
+      "body": "在仓库根目录创建 hello.txt，内容一行：M1-OK\n完成后调用 ticket_report 工具：status=done，summary=已创建 hello.txt。",
+      "url": "https://github.com/test/repo/issues/1",
+      "at": "2026-11-23T15:45:05.812Z",
+      "status": "done",
+      "createdAt": 1795448720868,
+      "updatedAt": 1795448729189,
+      "sessionId": "worker-github-issue-1",
+      "workdir": "C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh\\test\\tmp\\m1\\state\\work\\github-issue-1",
+      "branch": null,
+      "attempts": 1,
+      "lastError": null,
+      "report": {
+        "at": 1795448729189,
+        "summary": "已创建 hello.txt",
+        "question": "",
+        "link": "https://github.com/test/repo/issues/1"
+      },
+      "relayed": {
+        "started": {
+          "at": 1795448721045,
+          "text": "【superagent】开工 github:issue-1｜创建 hello.txt｜https://github.com/test/repo/issues/1",
+          "delivered": true
+        },
+        "done": {
+          "at": 1795448729192,
+          "text": "【superagent】完成 github:issue-1｜已创建 hello.txt｜https://github.com/test/repo/issues/1",
+          "delivered": true
+        }
+      },
+      "dryRun": false
+    },
+    "github:issue-2": {
+      "id": "github:issue-2",
+      "source": "github",
+      "kind": "issue",
+      "thread": "issue-2",
+      "actor": "tester",
+      "title": "需要人确认的工单",
+      "body": "先不要改任何文件。\n直接调用 ticket_report：status=waiting，question=需要人确认是否创建 second.txt。",
+      "url": "https://github.com/test/repo/issues/2",
+      "at": "2026-11-23T15:47:07.748Z",
+      "status": "waiting",
+      "createdAt": 1795448834715,
+      "updatedAt": 1795448837699,
+      "sessionId": "worker-github-issue-2",
+      "workdir": "C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh\\test\\tmp\\m1\\state\\work\\github-issue-2",
+      "branch": "superagent/github-issue-2",
+      "attempts": 1,
+      "lastError": null,
+      "report": {
+        "at": 1795448837699,
+        "summary": "工单要求先不改任何文件，直接请求人工确认；未做任何改动。",
+        "question": "需要人确认是否创建 second.txt？",
+        "link": ""
+      },
+      "relayed": {
+        "started": {
+          "at": 1795448835012,
+          "text": "【superagent】开工 github:issue-2｜需要人确认的工单｜https://github.com/test/repo/issues/2",
+          "delivered": true
+        },
+        "needHuman": {
+          "at": 1795448837705,
+          "text": "【superagent】需要人 github:issue-2｜需要人确认是否创建 second.txt？｜https://github.com/test/repo/issues/2",
+          "delivered": true
+        }
+      },
+      "dryRun": false
+    }
+  },
+  "sourceStatus": {
+    "github": {
+      "ok": true,
+      "at": 1795448885354,
+      "added": 0,
+      "watermark": "2026-11-23T15:48:05.352Z"
+    }
+  },
+  "lastError": null
+}

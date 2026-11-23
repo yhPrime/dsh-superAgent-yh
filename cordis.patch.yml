@@ -1,0 +1,6 @@
+# dsh-superAgent-yh 自制版 bundle 层：只插一个插件行，配置留空走默认（dryRun=true，源全部关闭）。
+# 真实源配置由用户在自己的 profile cordis.patch.yml 里按 id 覆盖 config。
+- insert:
+    - id: dsh-superagent-yh
+      name: dsh-superagent-yh
+      config: {}

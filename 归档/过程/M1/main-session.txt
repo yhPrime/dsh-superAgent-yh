@@ -1,0 +1,248 @@
+#4 turn/start 
+#8 user/message 【superagent】开工 github:issue-1｜创建 hello.txt｜https://github.com/test/repo/issues/1
+#9 user/message <system-reminder>
+The following information describes your current session:
+
+Current working directory: "C:/Users/yh/WorkDeepSeek/插件/dsh-superAgent-yh/test/tmp/
+#10 user/message <system-reminder>
+A skill is a reusable set of task-specific instructions. The following skills are available in this session:
+
+<available_skills>
+- `diagnose-w
+#11 user/message Time sampled while preparing turn 1, step 1: 2026-11-23T23:45:21+08:00[Asia/Shanghai]
+Browser time zone for this request: unavailable. Ask the user to clarify o
+#19 assistant/message 
+#20 tool/call skill {"name": "workbench-constitution"}
+#21 tool/result <skill_content name="workbench-constitution">
+<skill_resources>
+Base directory for this skill: C:\Users\yh\.dsh\skills\workbench-constitution
+Resolve relative paths mentioned by this skill against the
+#22 tool/call pwsh {"command": "Get-Location; Get-ChildItem -Force | Select-Object Mode,Length,Name", "description": "Show working directory and files"}
+#25 tool/result 
+Path
+----
+C:\Users\yh\WorkDeepSeek\插件\dsh-superAgent-yh\test\tmp\m1\repo
+
+Mode   : d--h-
+Length : 
+Name   : .git
+
+
+Mode   : -a---
+Length : 16
+Name   : README.md
+
+
+
+#29 assistant/message 
+#30 tool/call superagent_status {"limit": 20}
+#31 tool/result {
+  "dryRun": false,
+  "mainSessionId": "superagent-main-m1",
+  "pollIntervalMs": 2000,
+  "stats": {
+    "queued": 0,
+    "running": 1,
+    "waiting": 0,
+    "done": 0,
+    "failed": 0
+  },
+  "lastErr
+#32 tool/call pwsh {"command": "cd 'C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh\\test\\tmp\\m1\\repo'; git status; git log --oneline -5; git branch -a; git remote -v; Get-C
+#35 tool/result On branch main
+nothing to commit, working tree clean
+9fd78a2 fixture: initial
+* main
++ superagent/github-issue-1
+# fixture repo
+
+#40 assistant/message 
+#41 tool/call pwsh {"command": "$b='C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh'; Get-ChildItem $b | Select-Object Name; Get-ChildItem \"$b\\test\\tmp\\m1\" -Recurse -Depth
+#44 tool/result 
+Name
+----
+归档
+docs
+lib
+probe
+test
+.gitignore
+计划书.md
+项目信息.md
+cordis.patch.yml
+package.json
+
+
+FullName
+--------
+C:\Users\yh\WorkDeepSeek\插件\dsh-superAgent-yh\test\tmp\m1\repo
+C:\Users\
+#48 assistant/message 
+#49 tool/call pwsh {"command": "$b='C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh\\test\\tmp\\m1'; Get-Content \"$b\\state\\state.json\" -Raw; Write-Host '--- github-fake.log
+#52 tool/result {
+  "version": 1,
+  "createdAt": 1795448719344,
+  "updatedAt": 1795448735387,
+  "watermark": {
+    "github": "2026-11-23T15:45:35.384Z"
+  },
+  "tickets": {
+    "github:issue-1": {
+      "id": "github:
+#56 assistant/message 
+#57 tool/call pwsh {"command": "$b='C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh\\test\\tmp\\m1'; Get-Item \"$b\\state\\work\\github-issue-1\\hello.txt\" | Select-Object Cre
+#60 tool/result 
+--- worker git ---
+?? hello.txt
+9fd78a2 fixture: initial
++ main
+* superagent/github-issue-1
+CreationTime        LastWriteTime
+------------        -------------
+2026/11/23 23:45:25 2026/11/23 23:4
+#64 assistant/message 
+#65 tool/call list_agents {}
+#66 tool/result lead [running] — root agent
+#67 tool/call pwsh {"command": "$b='C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh'; Get-ChildItem \"$b\\docs\" | Select-Object Name; Get-ChildItem \"$b\\lib\" | Select-Object
+#70 tool/result 
+Name
+----
+执行器移植笔记.md
+GitHub源移植笔记.md
+M0-探针报告.md
+source
+config.js
+executor.js
+index.js
+redact.js
+relay.js
+store.js
+ticket.js
+
+
+#74 assistant/message 
+#75 tool/call pwsh {"command": "Get-ChildItem env: | Where-Object Name -like 'DSH*' | Select-Object Name,Value | Format-Table -AutoSize", "description": "Show DSH env variables"}
+#78 tool/result 
+Name                Value
+----                -----
+DSH_HOME            C:\Users\yh\.dsh
+DSH_INSTALL_DIR     C:\Users\yh\AppData\Local\Programs\DeepSeek Harness\resources\app.asar\dsh\node_module
+#82 assistant/message 
+#83 tool/call pwsh {"command": "$b='C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh'; Get-Content \"$b\\lib\\relay.js\" -Raw | Select-Object -First 1", "description": "Read rel
+#86 tool/result /**
+ * 主线三条短消息：开工 1 条、需要人 1 条（含问题）、完成 1 条（含链接）。
+ * 单工单对主线上下文增量目标 ≤ 1K token；同一 kind 只投递一次（ticket.relayed 记账）。
+ */
+const LIMIT = { title: 80, question: 200, summary: 300, reason: 200 }
+
+const clip = (t
+#90 assistant/message 
+#91 tool/call read {"file_path": "C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh\\test\\tmp\\m1\\state\\work\\github-issue-1\\hello.txt"}
+#92 tool/result <path>C:\Users\yh\WorkDeepSeek\插件\dsh-superAgent-yh\test\tmp\m1\state\work\github-issue-1\hello.txt</path>
+<type>file</type>
+<content>
+1: M1-OK
+
+(End of file - total 1 lines)
+</content>
+#93 tool/call superagent_status {"limit": 5}
+#94 tool/result {
+  "dryRun": false,
+  "mainSessionId": "superagent-main-m1",
+  "pollIntervalMs": 2000,
+  "stats": {
+    "queued": 0,
+    "running": 0,
+    "waiting": 0,
+    "done": 1,
+    "failed": 0
+  },
+  "lastErr
+#98 assistant/message 工单已由插件派发的工作会话执行完毕，我这边（主线会话 `superagent-main-m1`）只收到了状态通知。我核对的结果如下：
+
+- **工单状态**：`github:issue-1` = done，摘要「已创建 hello.txt」，worker 会话 `worker-github-issue-1`，无错误。
+
+#100 turn/end {"kind":"completed"}
+#101 turn/start 
+#104 user/message 【superagent】完成 github:issue-1｜已创建 hello.txt｜https://github.com/test/repo/issues/1
+#106 assistant/message 已收到完成通知，与刚才核对一致：
+
+- **`github:issue-1`** → done，摘要「已创建 hello.txt」，链接 https://github.com/test/repo/issues/1
+- **产物**：[hello.txt](C:/Users/yh/WorkDeepSeek/插件/dsh-
+#108 turn/end {"kind":"completed"}
+#111 turn/start 
+#114 user/message 【superagent】开工 github:issue-2｜需要人确认的工单｜https://github.com/test/repo/issues/2
+#117 assistant/message 
+#118 tool/call superagent_status {"limit": 10}
+#120 tool/result {
+  "dryRun": false,
+  "mainSessionId": "superagent-main-m1",
+  "pollIntervalMs": 2000,
+  "stats": {
+    "queued": 0,
+    "running": 0,
+    "waiting": 1,
+    "done": 1,
+    "failed": 0
+  },
+  "lastErr
+#124 assistant/message 
+#125 tool/call pwsh {"command": "$b='C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh'; Select-String -Path \"$b\\lib\\*.js\" -Pattern 'waiting|answer|resume' | Select-Object -Fi
+#128 tool/result executor.js:9: import { markDone, markFailed, markRunning, markWaiting, safeSessionId } from './ticket.js'
+executor.js:27: `3. 结束时必须调用 ${REPORT_TOOL} 工具：完成用 status=done + summary（≤300字，可带 link）；需要人决策
+#132 assistant/message 
+#133 tool/call read {"file_path": "C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh\\lib\\executor.js"}
+#134 tool/result <path>C:\Users\yh\WorkDeepSeek\插件\dsh-superAgent-yh\lib\executor.js</path>
+<type>file</type>
+<content>
+1: /**
+2:  * 执行器：为工单开独立 worktree + 独立 worker 会话（worker-<id>），投递 mandate，
+3:  * 用 ticket_report 工具
+#138 assistant/message 
+#139 tool/call pwsh {"command": "$b='C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh'; Get-Content \"$b\\lib\\index.js\" -Raw", "description": "Read plugin index.js"}
+#142 tool/result /**
+ * 装配：读配置 → 开 state → 建源 → 调度轮询 → 串行派工 → 主线 relay → 只读状态工具。
+ * 失败不吞：source 错误落 state.lastError，工单错误落 ticket.lastError，均可被面板/状态工具看到。
+ */
+import { normalizeConfig, secretsOf } from './config.js'
+imp
+#146 assistant/message 
+#147 tool/call pwsh {"command": "$b='C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh'; Select-String -Path \"$b\\计划书.md\",\"$b\\docs\\*.md\" -Pattern '需要人|waiting|人确认|回复' | Sele
+#150 tool/result 计划书.md:34: | E4 | 主线只收三条短消息 | 开工 1 条、需要人 1 条（含问题）、完成 1 条（含链接）；单工单对主线上下文增量 ≤ 1K token |
+计划书.md:91: ticket.js           工单状态机：queued → running → waiting → done/failed
+计划书.md:134: → running → waiting /
+#154 assistant/message 
+#155 tool/call pwsh {"command": "$b='C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh\\test\\tmp\\m1'; (Get-Content \"$b\\state\\state.json\" -Raw | ConvertFrom-Json).tickets.'gi
+#158 tool/result {
+  "id": "github:issue-2",
+  "source": "github",
+  "kind": "issue",
+  "thread": "issue-2",
+  "actor": "tester",
+  "title": "需要人确认的工单",
+  "body": "先不要改任何文件。\n直接调用 ticket_report：status=waiting，q
+#162 assistant/message 
+#163 tool/call pwsh {"command": "$w='C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh\\test\\tmp\\m1\\state\\work\\github-issue-2'; if (Test-Path $w) { cd $w; git status --short;
+#166 tool/result 9fd78a2 fixture: initial
+
+Name
+----
+.git
+README.md
+
+
+#170 assistant/message `github:issue-2` 已按工单要求停在「等人」状态，没有动任何文件：
+
+- **状态**：waiting（未完成、未失败），摘要「工单要求先不改任何文件，直接请求人工确认」
+- **待决问题**：**需要人确认是否创建 second.txt？**
+- **工作区核对**：[state\work\github
+#172 turn/end {"kind":"completed"}
+#173 turn/start 
+#176 user/message 【superagent】需要人 github:issue-2｜需要人确认是否创建 second.txt？｜https://github.com/test/repo/issues/2
+#178 assistant/message 收到 `github:issue-2` 的等人通知，与你上一条看到的一致。当前等待你的决定：
+
+> **是否创建 second.txt？**
+
+- 选 **创建**：工单继续，由 worker 会话在 `state\work\github-issue-2` 里新建 second.txt 并回报完成。
+- 选 **不创建
+#180 turn/end {"kind":"completed"}

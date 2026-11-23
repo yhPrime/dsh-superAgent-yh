@@ -5,7 +5,7 @@
 
 - 包名：`dsh-superagent-yh`（npm 不允许大写）；显示名：**dsh-superAgent-yh 自制版**
 - 宿主：DeepSeek Harness `>=0.2.2-rc.5 <0.3.0`
-- 来源：GitHub、飞书（插件内直连 HTTP）；QQ 预留（未接入即 fail-closed）；微信本期不做
+- 来源：GitHub、飞书（插件内直连 HTTP）；QQ 个人号（OneBot v11）与官方机器人（roost-host/1）；微信本期不做
 
 ## 能力
 
@@ -53,7 +53,18 @@ $dsh = "<DSH 安装目录>\resources\runtime\cli\bin\dsh.cmd"   # 或已加入 P
         chatIds: []
         requireMention: true
       qq:
-        enabled: false                # 预留；启用会 fail-closed 报错
+        enabled: false
+        mode: personal            # personal=OneBot v11；official=roost-host/1
+        requireAt: true
+        confirmWrites: false
+        personal:
+          httpUrl: http://127.0.0.1:6700
+          wsUrl: ws://127.0.0.1:6700
+          selfId: ""              # requireAt 时必填
+        official:
+          host: 127.0.0.1
+          port: 6807
+          token: ""
 ```
 
 ## 面板
@@ -69,9 +80,9 @@ $dsh = "<DSH 安装目录>\resources\runtime\cli\bin\dsh.cmd"   # 或已加入 P
 
 ## 已知限制
 
-- 真实 GitHub / 飞书需要凭证；仓库内集成测试用本地假服务（`test/fakes/`）
+- 真实 GitHub / 飞书 / QQ 需要凭证与网关；仓库内集成测试用本地假服务（`test/fakes/`）
 - 评论追问（同 thread 二次触发）本期只到 issue 本体，后续迭代补
-- QQ 未接入；微信不做
+- QQ 只发文本；媒体/图片/语音未做；微信不做
 
 ## 目录
 

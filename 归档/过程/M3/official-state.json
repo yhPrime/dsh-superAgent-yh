@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "createdAt": 1795451636892,
+  "updatedAt": 1795451711209,
+  "watermark": {
+    "qq": "2026-11-23T16:35:11.209Z"
+  },
+  "tickets": {
+    "qq:msg-e1": {
+      "id": "qq:msg-e1",
+      "source": "qq",
+      "kind": "message",
+      "thread": "chat:group:g1",
+      "actor": "u1",
+      "title": "在仓库根目录创建 qq2.txt，内容一行：M3-OFFICIAL。完成后调用 ticket_report，status=done，summary=已创建 qq2.txt。",
+      "body": "在仓库根目录创建 qq2.txt，内容一行：M3-OFFICIAL。完成后调用 ticket_report，status=done，summary=已创建 qq2.txt。",
+      "url": "",
+      "at": "2026-11-23T16:33:46.875Z",
+      "status": "done",
+      "createdAt": 1795451638936,
+      "updatedAt": 1795451645698,
+      "sessionId": "worker-qq-msg-e1",
+      "workdir": "C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh\\test\\tmp\\m3b\\state\\work\\qq-msg-e1",
+      "branch": "superagent/qq-msg-e1",
+      "attempts": 1,
+      "lastError": null,
+      "report": {
+        "at": 1795451645698,
+        "summary": "已创建 qq2.txt",
+        "question": "",
+        "link": ""
+      },
+      "relayed": {
+        "started": {
+          "at": 1795451639123,
+          "text": "【superagent】开工 qq:msg-e1｜在仓库根目录创建 qq2.txt，内容一行：M3-OFFICIAL。完成后调用 ticket_report，status=done，summary=已创建 qq…｜",
+          "delivered": false
+        },
+        "done": {
+          "at": 1795451645700,
+          "text": "【superagent】完成 qq:msg-e1｜已创建 qq2.txt",
+          "delivered": false
+        }
+      },
+      "dryRun": false
+    }
+  },
+  "sourceStatus": {
+    "qq": {
+      "ok": true,
+      "at": 1795451711209,
+      "added": 0,
+      "watermark": "2026-11-23T16:35:11.209Z"
+    }
+  },
+  "lastError": null
+}

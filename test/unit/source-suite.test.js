@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { assertSource, contractCheck, normalizeTrigger } from '../../lib/source/contract.js'
 import { createGithubSource } from '../../lib/source/github.js'
 import { createFeishuSource } from '../../lib/source/feishu.js'
-import { createQqPlaceholder, createQqSource } from '../../lib/source/qq.js'
+import { createQqPlaceholder } from '../../lib/source/qq.js'
 
 function response(status, body) {
   return { ok: status >= 200 && status < 300, status, headers: { get: () => null }, async json() { return body }, async text() { return JSON.stringify(body) } }
@@ -90,6 +90,4 @@ test('一致性：QQ 空实现明确报未接入，不许静默', async () => {
   assert.deepEqual(contractCheck(source), [])
   await assert.rejects(() => source.poll(null), /QQ .*源未接入（fail-closed）/)
   await assert.rejects(() => source.send('x', 'y'), /未接入/)
-  assert.throws(() => createQqSource({ mode: 'official' }), /官方机器人源未接入/)
-  assert.throws(() => createQqSource({ mode: 'personal' }), /个人号源未接入/)
 })

@@ -1,6 +1,6 @@
 # 子计划书 · M3 QQ 接入
 
-> 版本：v0.1（草案）｜状态：**草案（待拍板）**｜定稿日期：—｜权威范围：仅本项目 QQ 源（官方机器人 / QQ 号两模式）的接入目标、方案、里程碑与验收；不覆盖 GitHub/飞书，不改主计划书已拍板的 D1–D8。
+> 版本：v1.0（定稿）｜状态：**定稿（2026-11-24 拍板 D9–D11）**｜定稿日期：2026-11-24｜权威范围：仅本项目 QQ 源（官方机器人 / QQ 号两模式）的接入目标、方案、里程碑与验收；不覆盖 GitHub/飞书，不改主计划书已拍板的 D1–D8。
 >
 > 依据：主计划书 v1.0 §4.3/§5 M3+/§7 R7；2026-11-24 调研 `roost-qq/dsh-roost`、`aureth-labs/dsh-aurabot-qq`、`roost-qq/qq-bot-roost`（后者的 `docs/宿主协议v1.md`）。调研只读，未安装任何插件、未改用户 QQ 环境。
 
@@ -74,12 +74,14 @@ interface Source {
 
 ### 3.3 official 模式（roost-host/1）
 
-- 新文件 `lib/source/qq/roost-host.js`：WS 客户端（`hello{s since}` → `welcome`；处理 `event`/`res`/`gap`/`ping`），HTTP `POST /rpc` 兜底；令牌、端点手填（默认 `127.0.0.1` + 框架给的端口）。
+> 定稿修订（2026-11-24）：传输采用协议文档里的 **SSE（`GET /events`）+ `POST /rpc`**，不实现 WS 帧握手。理由：语义相同（同一方法表、同一事件流、断线用 `Last-Event-ID`/`since` 补发），代码量约为 WS 客户端的 1/2，符合「最简洁的最优解」；WS 作为后续可选优化，不阻塞验收。
+
+- 新文件 `lib/source/qq/roost-host.js`：SSE 客户端（`GET /events?since=`，`Authorization: Bearer`，断线指数退避，`gap` 记错误）+ `POST /rpc` 调用器（`{id, method, params}` → `{ok,data|error}`）。
 - `lib/source/qq/official.js`：
-  - 收：`message` 事件 → Trigger（`id=eventId`，`thread=chat:<kind>:<chatId>`，`body=content`，`actor=sender.openid`）。
+  - 收：`message` 帧 → Trigger（`id=eventId`，`thread=chat:<kind>:<chatId>`，`body=content`，`actor=sender.openid`）。
   - 发：`msg.send`，带 `kind/chatId/content/msgId/eventId/receivedAt/requestId`（`receivedAt` 用事件的 `at`，避免被动窗口失效；`requestId` 用 ticket id 保证幂等）。
   - 能力探测：启动/首次 poll 调 `system.capabilities`，缺 `msg.send`/`message` scope 就 fail-closed 报「宿主协议不满足」。
-  - `gap` 事件：记 `lastError` 并重新 `hello`，不假装没丢。
+  - `gap` 事件：记 `lastError` 并重新连接，不假装没丢。
 - 不实现 QQ 官方 API 直连（需要 AppID/Secret + 公网回调/网关，重复框架已做的事）；也不抄 qq-bot-roost 代码（AGPL）。
 
 ### 3.4 配置（在现有 `sources.qq` 上扩展）
@@ -149,10 +151,10 @@ sources:
 | E7.5 | 断线重连后不丢消息（补发）且不重复派工（幂等） |
 | E7.6 | 四路测试全绿；`docs/source-qq.md` 与 README 更新；打包后可安装 |
 
-## 8 待拍板（D9–D11）
+## 8 已拍板（2026-11-24）
 
-- **D9 官方机器人传输**：按 `roost-host/1` 写协议客户端（推荐，不染 AGPL）／还是本期不做官方、只做 QQ 号／还是接受 AGPL 移植 roost。
-- **D10 个人号网关**：以 SnowLuma 为主（可自动读端点）+ 手填兜底（推荐）／还是只支持手填。
-- **D11 交付形态**：QQ 两模式并入本插件（推荐，一个 Source 两种 mode）／还是拆成独立 `dsh-superagent-yh-qq` 包。
+- **D9**：官方机器人按 **`roost-host/1` 协议写客户端**（SSE + `/rpc`，不移植 AGPL 代码，不自己重写 QQ 官方 API）。
+- **D10**：个人号以 **SnowLuma 为主**（可自动读本地 OneBot 端点配置），**手填兜底**。
+- **D11**：QQ 两模式**并入本插件**（一个 `Source` 两个 mode），不拆独立包。
 
-拍板后把本文件状态改为「定稿」，再按 M3.1 开工；**未定稿不动代码**（主计划 §9 的规矩）。
+本文件自本条起状态为「定稿」；后续按 §4 里程碑开工。改动方案须在本文件先改版本与状态再动代码。

@@ -31,9 +31,30 @@ test('启用源且 dryRun=false 必须给 repoPath', () => {
   )
 })
 
-test('QQ 源启用即 fail-closed', () => {
-  assert.throws(() => normalizeConfig({ sources: { qq: { enabled: true } } }), /未接入/)
-  assert.throws(() => normalizeConfig({ sources: { qq: { enabled: true, mode: 'personal' } } }), /个人号源未接入/)
+test('QQ 两模式缺配置 fail-closed', () => {
+  assert.throws(() => normalizeConfig({ sources: { qq: { enabled: true, mode: 'official' } } }), /token/)
+  assert.throws(() => normalizeConfig({ sources: { qq: { enabled: true, mode: 'personal' } } }), /httpUrl|wsUrl/)
+  assert.throws(() => normalizeConfig({ sources: { qq: { enabled: true, mode: 'bogus' } } }), /只能是/)
+  assert.throws(
+    () => normalizeConfig({ sources: { qq: { enabled: true, mode: 'personal', personal: { httpUrl: 'http://127.0.0.1:6700' } } } }),
+    /selfId/,
+  )
+})
+
+test('QQ 个人号合法配置被规范化', () => {
+  const config = normalizeConfig({
+    sources: {
+      qq: {
+        enabled: true,
+        mode: 'personal',
+        requireAt: true,
+        personal: { httpUrl: 'http://127.0.0.1:6700/', wsUrl: 'ws://127.0.0.1:6700', selfId: '999' },
+      },
+    },
+  })
+  assert.equal(config.sources.qq.mode, 'personal')
+  assert.equal(config.sources.qq.personal.httpUrl, 'http://127.0.0.1:6700')
+  assert.equal(config.sources.qq.personal.selfId, '999')
 })
 
 test('maxWorkers 只允许 1', () => {

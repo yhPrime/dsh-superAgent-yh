@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "createdAt": 1795451553223,
+  "updatedAt": 1795451621485,
+  "watermark": {
+    "qq": "2026-11-23T16:33:41.484Z"
+  },
+  "tickets": {
+    "qq:msg-9001": {
+      "id": "qq:msg-9001",
+      "source": "qq",
+      "kind": "message",
+      "thread": "group:100",
+      "actor": "123",
+      "title": "在仓库根目录创建 qq.txt，内容一行：M3-OK。完成后调用 ticket_report，status=done，summary=已创建 qq.txt。",
+      "body": "在仓库根目录创建 qq.txt，内容一行：M3-OK。完成后调用 ticket_report，status=done，summary=已创建 qq.txt。",
+      "url": "",
+      "at": "2026-11-23T16:32:22.000Z",
+      "status": "done",
+      "createdAt": 1795451555245,
+      "updatedAt": 1795451563031,
+      "sessionId": "worker-qq-msg-9001",
+      "workdir": "C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh\\test\\tmp\\m3a\\state\\work\\qq-msg-9001",
+      "branch": "superagent/qq-msg-9001",
+      "attempts": 1,
+      "lastError": null,
+      "report": {
+        "at": 1795451563031,
+        "summary": "已创建 qq.txt",
+        "question": "",
+        "link": "C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh\\test\\tmp\\m3a\\state\\work\\qq-msg-9001\\qq.txt"
+      },
+      "relayed": {
+        "started": {
+          "at": 1795451555489,
+          "text": "【superagent】开工 qq:msg-9001｜在仓库根目录创建 qq.txt，内容一行：M3-OK。完成后调用 ticket_report，status=done，summary=已创建 qq.txt。｜",
+          "delivered": false
+        },
+        "done": {
+          "at": 1795451563034,
+          "text": "【superagent】完成 qq:msg-9001｜已创建 qq.txt｜C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh\\test\\tmp\\m3a\\state\\work\\qq-msg-9001\\qq.txt",
+          "delivered": false
+        }
+      },
+      "dryRun": false
+    }
+  },
+  "sourceStatus": {
+    "qq": {
+      "ok": true,
+      "at": 1795451621485,
+      "added": 0,
+      "watermark": "2026-11-23T16:33:41.484Z"
+    }
+  },
+  "lastError": null
+}

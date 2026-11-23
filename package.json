@@ -1,6 +1,6 @@
 {
   "name": "dsh-superagent-yh",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "dsh-superAgent-yh 自制版：每个工单在独立会话与独立目录执行，主线只收三条短消息。",
   "type": "module",
@@ -21,10 +21,18 @@
     "locale/*.json",
     "docs",
     "icon.svg",
-    "README.md"
+    "README.md",
+    "SETUP.md",
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.md"
   ],
   "engines": {
     "node": "^22.19.0 || >=24.0.0",
     "dsh": ">=0.2.2-rc.5 <0.3.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yhPrime/dsh-superAgent-yh.git"
+  },
+  "license": "MIT"
 }

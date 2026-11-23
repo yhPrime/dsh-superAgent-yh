@@ -93,3 +93,11 @@ docs/           计划书报告、移植笔记、QQ 接入说明
 cordis.patch.yml 插件行 + worker preset
 locale/         zh/en 显示名与说明
 ```
+
+## 许可
+
+MIT（见 [LICENSE](LICENSE)）。设计参考与移植来源见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)：
+
+- 官方 superagent 原型（MIT）——工单/会话隔离的设计参考
+- dsh-aurabot-qq（MIT）——OneBot v11 客户端移植
+- dsh-roost / qq-bot-roost（AGPL）——只按公开协议实现 `roost-host/1`，未复制代码

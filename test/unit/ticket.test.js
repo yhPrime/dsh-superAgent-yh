@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createTicket, canTransition, markRunning, markDone, markFailed, markWaiting, safeSessionId, ticketStats } from '../../lib/ticket.js'
+import { createTicket, canTransition, markRunning, markDone, markFailed, markWaiting, safeSessionId, ticketStats, hourlyCount, threadCoolingDown } from '../../lib/ticket.js'
 
 const trigger = {
   id: 'issue-1',
@@ -54,4 +54,25 @@ test('统计按状态计数', () => {
   assert.equal(stats.queued, 1)
   assert.equal(stats.done, 2)
   assert.equal(stats.failed, 0)
+})
+
+test('每小时上限只数最近 1 小时', () => {
+  const now = Date.now()
+  const tickets = {
+    old: { createdAt: now - 3_600_001 },
+    fresh1: { createdAt: now - 1000 },
+    fresh2: { createdAt: now - 500 },
+  }
+  assert.equal(hourlyCount(tickets, now), 2)
+})
+
+test('同源同线程冷却窗口内返回既有工单', () => {
+  const now = Date.now()
+  const tickets = {
+    'github:issue-1': { id: 'github:issue-1', source: 'github', thread: 'issue-1', createdAt: now - 10_000 },
+  }
+  assert.equal(threadCoolingDown(tickets, 'github', 'issue-1', 60_000, now)?.id, 'github:issue-1')
+  assert.equal(threadCoolingDown(tickets, 'github', 'issue-1', 5_000, now), null)
+  assert.equal(threadCoolingDown(tickets, 'feishu', 'issue-1', 60_000, now), null)
+  assert.equal(threadCoolingDown(tickets, 'github', 'issue-1', 0, now), null)
 })

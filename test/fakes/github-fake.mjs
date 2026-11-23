@@ -7,6 +7,7 @@ import { appendFileSync } from 'node:fs'
 
 const port = Number(process.argv[2] ?? 59611)
 const logFile = process.argv[3] ?? 'test/tmp/m1/github-fake.log'
+const mode = process.env.FAKE_GITHUB_MODE ?? ''
 
 const updatedAt = new Date().toISOString()
 const issue = {
@@ -50,6 +51,8 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify(body))
   }
   if (req.method === 'GET' && url.pathname === '/repos/test/repo/issues') {
+    if (mode === '401') return send(401, { message: 'Bad credentials' })
+    if (mode === '500') return send(500, { message: 'boom' })
     return send(200, [issue, issue2])
   }
   if (req.method === 'POST' && /^\/repos\/test\/repo\/issues\/\d+\/(comments|labels)$/.test(url.pathname)) {

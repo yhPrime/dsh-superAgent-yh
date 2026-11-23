@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "createdAt": 1795449088277,
+  "updatedAt": 1795449106336,
+  "watermark": {},
+  "tickets": {},
+  "sourceStatus": {
+    "github": {
+      "ok": false,
+      "at": 1795449106336,
+      "lastError": "GitHub API 401 /repos/test/repo/issues?state=open&sort=updated&direction=asc&per_page=100&since=2026-11-09T15%3A51%3A46.333Z {\"message\":\"Bad credentials\"}"
+    }
+  },
+  "lastError": "github: GitHub API 401 /repos/test/repo/issues?state=open&sort=updated&direction=asc&per_page=100&since=2026-11-09T15%3A51%3A46.333Z {\"message\":\"Bad credentials\"}"
+}

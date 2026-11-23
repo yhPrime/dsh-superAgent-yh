@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "createdAt": 1795448955616,
+  "updatedAt": 1795449007743,
+  "watermark": {
+    "feishu": "2026-11-23T15:50:07.740Z"
+  },
+  "tickets": {
+    "feishu:msg-om_m2_1": {
+      "id": "feishu:msg-om_m2_1",
+      "source": "feishu",
+      "kind": "message",
+      "thread": "chat:oc_m2",
+      "actor": "ou_tester",
+      "title": "请创建 m2.txt，内容一行：M2-OK。完成后调用 ticket_report，status=done，summary=已创建 m2.txt。",
+      "body": "请创建 m2.txt，内容一行：M2-OK。完成后调用 ticket_report，status=done，summary=已创建 m2.txt。",
+      "url": "",
+      "at": "2026-11-23T15:49:06.263Z",
+      "status": "done",
+      "createdAt": 1795448957158,
+      "updatedAt": 1795448964850,
+      "sessionId": "worker-feishu-msg-om_m2_1",
+      "workdir": "C:\\Users\\yh\\WorkDeepSeek\\插件\\dsh-superAgent-yh\\test\\tmp\\m2\\state\\work\\feishu-msg-om_m2_1",
+      "branch": "superagent/feishu-msg-om_m2_1",
+      "attempts": 1,
+      "lastError": null,
+      "report": {
+        "at": 1795448964850,
+        "summary": "已创建 m2.txt（内容一行：M2-OK），已校验文件内容正确。",
+        "question": "",
+        "link": ""
+      },
+      "relayed": {
+        "started": {
+          "at": 1795448957448,
+          "text": "【superagent】开工 feishu:msg-om_m2_1｜请创建 m2.txt，内容一行：M2-OK。完成后调用 ticket_report，status=done，summary=已创建 m2.txt。｜",
+          "delivered": true
+        },
+        "done": {
+          "at": 1795448964853,
+          "text": "【superagent】完成 feishu:msg-om_m2_1｜已创建 m2.txt（内容一行：M2-OK），已校验文件内容正确。",
+          "delivered": true
+        }
+      },
+      "dryRun": false
+    }
+  },
+  "sourceStatus": {
+    "feishu": {
+      "ok": true,
+      "at": 1795449007743,
+      "added": 0,
+      "watermark": "2026-11-23T15:50:07.740Z"
+    }
+  },
+  "lastError": null
+}

@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "dsh-superAgent-yh",
+    "description": "Runs each ticket in its own session and directory; the main session receives three short messages: started, needs human, done.",
+    "detail": "README.md"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "presets": [
+    {
+      "id": "standard"
+    },
+    {
+      "id": "ptc"
+    },
+    {
+      "id": "minimal"
+    },
+    {
+      "id": "cordis"
+    },
+    {
+      "id": "dsh-superagent-yh-worker",
+      "name": "dsh-superAgent-yh 执行器"
+    }
+  ],
+  "sessionId": "worker-m6-preset-check",
+  "steps": [
+    {
+      "create": {
+        "sessionId": "session-1459c5b7-6cbe-42d7-a510-ffcf7da78ab2",
+        "agentPreset": "dsh-superagent-yh-worker"
+      }
+    },
+    {
+      "resolve": {
+        "id": "worker-m6-preset-check"
+      }
+    },
+    {
+      "wait": "idle",
+      "records": 1
+    }
+  ],
+  "state": {
+    "cursor": 30,
+    "active": true,
+    "running": false,
+    "queue": [],
+    "pendingInput": []
+  }
+}

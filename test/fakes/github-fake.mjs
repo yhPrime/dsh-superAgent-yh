@@ -8,12 +8,14 @@ import { appendFileSync } from 'node:fs'
 const port = Number(process.argv[2] ?? 59611)
 const logFile = process.argv[3] ?? 'test/tmp/m1/github-fake.log'
 const mode = process.env.FAKE_GITHUB_MODE ?? ''
+const taskBody = process.env.FAKE_ISSUE_BODY
+const taskTitle = process.env.FAKE_ISSUE_TITLE
 
 const updatedAt = new Date().toISOString()
 const issue = {
   number: 1,
-  title: '创建 hello.txt',
-  body: [
+  title: taskTitle ?? '创建 hello.txt',
+  body: taskBody ?? [
     '在仓库根目录创建 hello.txt，内容一行：M1-OK',
     '完成后调用 ticket_report 工具：status=done，summary=已创建 hello.txt。',
   ].join('\n'),

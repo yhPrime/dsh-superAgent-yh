@@ -1,0 +1,84 @@
+# dsh-superAgent-yh 自制版
+
+把「每个工单在独立会话、独立目录里干活，人只在一条主线里收结果」做成一个可安装的 DSH 插件：
+不 checkout 源码、不手改 profile、不跑外部 setup。
+
+- 包名：`dsh-superagent-yh`（npm 不允许大写）；显示名：**dsh-superAgent-yh 自制版**
+- 宿主：DeepSeek Harness `>=0.2.2-rc.5 <0.3.0`
+- 来源：GitHub、飞书（插件内直连 HTTP）；QQ 预留（未接入即 fail-closed）；微信本期不做
+
+## 能力
+
+- **配置即可用**：一个插件行 + 默认 `dryRun=true`（只记录不干活）
+- **自动建工单**：任一启用源出现符合条件的动态 → 一个轮询周期内建 Ticket
+- **隔离执行**：`worker-<ticketId>` 独立会话 + `workRoot/<ticketId>` 独立 git worktree
+- **主线三条短消息**：开工 1 条、需要人 1 条（含问题）、完成 1 条（含链接/摘要）
+- **幂等**：ticket id 去重 + 水位推进 + 跨重启保留状态
+- **可见**：面板 `/dsh-superAgent-yh`（三态 + 最后错误 + 按源分组）与只读工具 `superagent_status`
+
+## 安装
+
+```powershell
+$dsh = "<DSH 安装目录>\resources\runtime\cli\bin\dsh.cmd"   # 或已加入 PATH 的 dsh
+& $dsh plugin --profile <你的 profile> add C:\path\to\dsh-superAgent-yh
+```
+
+或在 DSH **插件**页用「添加插件」选择本地目录/安装包。装完重载宿主。
+
+## 配置（profile 的 `cordis.patch.yml`）
+
+```yaml
+- id: dsh-superagent-yh
+  name: dsh-superagent-yh
+  config:
+    dryRun: false                     # 默认 true；确认要真干活再关
+    stateDir: C:/path/to/state        # 默认 <DSH_HOME>/state/dsh-superagent-yh
+    pollIntervalMs: 60000
+    mainSessionId: ""                 # 主线会话 id；留空则只记状态不投递
+    repoPath: C:/path/to/local-repo   # worker 从这里的 git worktree 检出
+    maxTicketsPerHour: 10
+    cooldownMs: 60000
+    sources:
+      github:
+        enabled: true
+        repo: owner/name
+        labels: [superagent]          # 全部命中才触发（空=不筛）
+        authors: [your-login]         # 触发人白名单
+        token: ""                     # 也可留空用匿名（限流更严）
+        confirmWrites: false          # 评论/打标签必须显式开启
+      feishu:
+        enabled: false
+        appId: ""
+        appSecret: ""
+        chatIds: []
+        requireMention: true
+      qq:
+        enabled: false                # 预留；启用会 fail-closed 报错
+```
+
+## 面板
+
+`http://<宿主地址>/dsh-superagent-yh`：总览三态计数、按源分组工单、最后错误、设置表单（dryRun / 主线会话 / 轮询间隔）。
+
+## 安全
+
+- 默认 dryRun；写操作（评论/标签/发消息）必须 `confirmWrites: true`
+- 作者白名单、每小时上限、冷却、ticket id 幂等
+- 凭证不写进 `state.json`；日志与面板文本统一走 `redact()`
+- worker 只在自己的 worktree 里改文件
+
+## 已知限制
+
+- 真实 GitHub / 飞书需要凭证；仓库内集成测试用本地假服务（`test/fakes/`）
+- 评论追问（同 thread 二次触发）本期只到 issue 本体，后续迭代补
+- QQ 未接入；微信不做
+
+## 目录
+
+```
+lib/           插件代码（index/config/store/ticket/executor/relay/panel/redact + source/）
+test/           单元测试、假源、会话日志解码工具
+docs/           计划书报告、移植笔记、QQ 接入说明
+cordis.patch.yml 插件行 + worker preset
+locale/         zh/en 显示名与说明
+```

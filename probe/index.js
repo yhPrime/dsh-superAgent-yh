@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 export const name = 'dsh-superagent-yh-m0-probe'
-export const inject = ['sessionController', 'workspaceRegistry']
+export const inject = ['sessionController', 'workspaceRegistry', 'agentPresets']
 
 const SESSION_ID = 'worker-m0-probe2'
 const PROMPT_1 = '只回复四个字符：M0-OK'
@@ -42,7 +42,8 @@ export function apply(ctx, config) {
       const evidence = existsSync(file)
         ? JSON.parse(readFileSync(file, 'utf8'))
         : { createdAt: new Date().toISOString(), runs: [] }
-      if (evidence.done) return
+      if (config.mode !== 'preset-check' && evidence.done) return
+      if (config.mode === 'preset-check' && existsSync(join(evidenceDir, 'preset-check.json'))) return
       const phase = evidence.phase1Done ? 2 : 1
       const run = { phase, pid: process.pid, at: new Date().toISOString(), steps: [] }
       evidence.runs.push(run)
@@ -50,6 +51,28 @@ export function apply(ctx, config) {
 
       try {
         const abort = new AbortController()
+
+        if (config.mode === 'preset-check') {
+          const presets = await ctx.agentPresets.list()
+          const sessionId = 'worker-m6-preset-check'
+          const out = { presets: presets.map((p) => ({ id: p.id, name: p.name })), sessionId, steps: [] }
+          try {
+            const created = await ctx.sessionController.create({ sessionId, cwd: workspaceDir, agentPreset: config.preset })
+            out.steps.push({ create: created })
+            const resolved = await ctx.sessionController.resolveAgent(sessionId)
+            out.steps.push({ resolve: 'error' in resolved ? resolved.error.code : { id: resolved.agent.id } })
+            await ctx.sessionController.prompt({ requestId: requestId('preset'), sessionId, mode: 'queue', content: [{ type: 'text', text: '只回复 OK' }] }, abort.signal)
+            const waited = await ctx.sessionController.wait({ sessionId, timeoutMs: 60000, maxMessages: 10 }, abort.signal)
+            out.steps.push({ wait: waited.reason, records: (waited.output?.records ?? []).length })
+            out.state = await ctx.sessionController.state({ sessionId }, abort.signal)
+          } catch (error) {
+            out.steps.push({ error: String(error && error.stack ? error.stack : error) })
+          }
+          writeFileSync(join(evidenceDir, 'preset-check.json'), JSON.stringify(out, null, 2), 'utf8')
+          evidence.done = true
+          writeFileSync(file, JSON.stringify(evidence, null, 2), 'utf8')
+          return
+        }
 
         // Q1：建会话（指定 id / 目录 / preset）
         if (phase === 1) {

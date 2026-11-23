@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "dsh-superAgent-yh 自制版",
+    "description": "每个工单在独立会话与独立目录执行，主线只收开工、需要人、完成三条短消息。",
+    "detail": "README.md"
+  }
+}

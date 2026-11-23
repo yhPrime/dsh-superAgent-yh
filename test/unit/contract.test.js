@@ -31,3 +31,17 @@ test('contractCheck 报出缺失能力', () => {
   assert.ok(problems.includes('poll 必须是函数'))
   assert.ok(problems.includes('capabilities.write=true 时必须实现 send()'))
 })
+
+test('超长正文截断到 20K，标题截断到 300', () => {
+  const trigger = normalizeTrigger({
+    id: 1,
+    thread: 't',
+    actor: 'a',
+    title: 'x'.repeat(500),
+    body: 'y'.repeat(50_000),
+    at: '2026-01-01T00:00:00Z',
+    kind: 'issue',
+  }, 'github')
+  assert.equal(trigger.title.length, 300)
+  assert.equal(trigger.body.length, 20_000)
+})

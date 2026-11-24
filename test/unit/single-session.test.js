@@ -79,14 +79,21 @@ function harness({ single = {}, sessions = [], workspaces = [{ id: 'w1', path: '
   return { maintainer, calls, store, config }
 }
 
+test('维护器：snapshot 是只读的，不会建会话', async () => {
+  const h = harness()
+  const snap = await h.maintainer.snapshot()
+  assert.equal(snap.workspaces[0].sessionId, null)
+  assert.equal(h.calls.created.length, 0)
+})
+
 test('维护器：没有会话时按 autoCreate 建一个；关掉则不建', async () => {
   const on = harness()
-  const snap = await on.maintainer.snapshot()
+  const snap = await on.maintainer.maintain()
   assert.equal(snap.workspaces[0].sessionId, intakeIdOf('intake', 'C:/repo'))
   assert.equal(on.calls.created.length, 1)
 
   const off = harness({ single: { autoCreate: false } })
-  const snap2 = await off.maintainer.snapshot()
+  const snap2 = await off.maintainer.maintain()
   assert.equal(snap2.workspaces[0].sessionId, null)
   assert.equal(snap2.workspaces[0].missing, true)
   assert.equal(off.calls.created.length, 0)

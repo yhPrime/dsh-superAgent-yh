@@ -1,6 +1,8 @@
 # 子计划书 · 单会话模式 + 控制台升级
 
-> 版本：v1.0（定稿）｜状态：**定稿（2026-11-24 拍板 D13）**｜定稿日期：2026-11-24｜权威范围：①「单会话模式」（每个工作空间一个接单会话 + 旧上下文自动压缩）②控制台 UI 升级。不改源协议、不改 worker 执行器、不改主线 relay。
+> 版本：v1.1（定稿）｜状态：**定稿（2026-11-24 拍板 D13）**｜定稿日期：2026-11-24｜权威范围：①「单会话模式」（每个工作空间一个接单会话 + 旧上下文自动压缩）②控制台 UI 升级。不改源协议、不改 worker 执行器、不改主线 relay。
+>
+> v1.1 实施口径澄清：§3.3 独立网页是**服务端渲染**（宿主没有 React/SSR），无法与应用内 React 组件共享渲染代码；因此改为**共享同一份 `/status` 数据与同一套主题 token/样式变量**，不复用组件。用户可见范围不变。
 >
 > 依据：用户 2026-11-24 需求「控制台太简陋」+「每个工作空间理应只有一个会话，跟它说的话只有短期上下文，过时间就超级压缩或删除，避免上下文堆积的额外开销，控制台要有开关」。
 > 已核实宿主能力（`cordis_inspect`）：`compaction.compactNow / compactIfNeeded / compactRegion`、`tokenMeter.contextPressure(session)`、`sessionController.state/list`、`workspaceRegistry.list/resolveByPath`、`agents.get`。**压缩复用宿主自己的 compaction 服务，不自写摘要逻辑。**
@@ -105,7 +107,7 @@ idleFor = now - lastActivityAt                          // lastActivity 由 stat
 
 ### 3.3 独立网页
 
-`/dsh-superagent-yh` 保留为只读兜底，同步升级样式与分页签（同一份渲染逻辑，避免两套漂移）。
+`/dsh-superagent-yh` 保留为只读兜底，同步升级样式（同一套主题 token/样式变量）并展示单会话摘要；数据复用同一个 `/status`。实施口径：服务端渲染，不共享 React 组件（v1.1 澄清）。
 
 ## 4 接口改动
 

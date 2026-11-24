@@ -8,37 +8,55 @@ window.__ModuleLoader__.load({
     const NS = 'dsh-superagent-yh'
     const BASE = '/dsh-superagent-yh'
     const PANEL_ID = NS
+    const TABS = ['overview', 'tickets', 'sources', 'settings']
 
     const DICT = {
       zh: {
         title: 'Superagent 控制台',
         subtitle: '每个工单独立会话与目录；主线只收三条短消息',
+        overview: '概览', ticketsTab: '工单', sourcesTab: '源', settingsTab: '设置',
         refresh: '刷新', close: '关闭', openRight: '在右栏打开', openConsole: '打开完整控制台',
         queued: '待处理', running: '进行中', waiting: '等进行人', done: '完成', failed: '失败',
-        tickets: '工单', noTickets: '还没有工单。先在下面启用一个源。',
-        source: '源', status: '状态', attempts: '尝试', lastError: '最后错误', actions: '操作',
+        all: '全部', search: '搜索工单 id / 标题', noMatch: '没有匹配的工单',
+        tickets: '工单', noTickets: '还没有工单。先在「源」里启用一个源。',
+        source: '来源', status: '状态', attempts: '尝试', lastError: '最后错误', actions: '操作',
         retry: '重试', cancel: '取消', session: '会话', log: '日志', closeLog: '收起日志',
         settings: '设置', basic: '基础', dryRun: 'dryRun（只记录不干活）', mainSession: '主线会话 ID',
-        poll: '轮询间隔(ms)', preset: 'worker preset', repoPath: '本地 git 仓库路径（worker worktree 源）', save: '保存', saving: '保存中…', saved: '已保存（插件会重载）',
+        poll: '轮询间隔(ms)', preset: 'worker preset', repoPath: '本地 git 仓库路径（worker worktree 源）',
+        save: '保存', saving: '保存中…', saved: '已保存（插件会重载）', unsaved: '有未保存的修改',
         github: 'GitHub', feishu: '飞书', qq: 'QQ', enabled: '启用', repo: '仓库 owner/name',
         labels: '触发标签（逗号分隔）', authors: '作者白名单（逗号分隔）', token: 'Token（留空保持）',
         tokenSet: '已配置，留空保持不变', tokenUnset: '未配置', apiBase: 'API 地址', confirmWrites: '允许回写',
         appId: 'App ID', appSecret: 'App Secret（留空保持）', chatIds: '群 chat_id（逗号分隔）', requireMention: '必须 @',
         mode: '模式', personal: '个人号（OneBot v11）', official: '官方机器人（roost-host/1）',
         selfId: '机器人 QQ 号', httpUrl: 'OneBot HTTP 地址', wsUrl: 'OneBot WS 地址',
-        host: '主机', port: '端口', guide: '查看工单三态、操作与源配置',
+        host: '主机', port: '端口', guide: '看工单三态、操作与源配置',
         loadFailed: '加载失败', noHostService: '当前宿主没有这个服务', closeHint: '关闭后可从左侧栏图标重新打开',
+        workspace: '工作空间', wsPath: '目录', wsSession: '接单会话', wsPressure: '上下文占用',
+        wsLastCompact: '上次压缩', wsNever: '还没压缩过', wsMissing: '无接单会话', wsRunning: '运行中',
+        compactNow: '立即压缩', compacting: '压缩中…', compactOk: '已压缩', compactSkip: '宿主判断无需压缩',
+        noWorkspace: '开启「单会话模式」后，这里会列出每个工作空间的接单会话。',
+        singleTitle: '单会话模式', singleHint: '每个工作空间只保留一个接单会话；空闲或上下文超阈值时自动压缩旧上下文。worker 仍每工单独立。',
+        singleEnabled: '启用单会话模式', idleMinutes: '空闲多少分钟后压缩', pressureRatio: '上下文占用超过此比例也压缩',
+        aggressive: '超级压缩（只保留最近几轮）', keepRecentTurns: '超级压缩保留最近几轮', autoCreate: '没有接单会话时自动创建',
+        sessionIdPrefix: '会话 id 前缀',
+        recent: '最近活动', sourceHealth: '源健康', noSources: '还没有启用任何源。',
+        stateOk: '正常', stateFail: '异常', watermark: '水位', added: '本轮新增',
+        confirmCompact: '压缩可能消耗一次模型调用，确定现在压缩？',
       },
       en: {
         title: 'Superagent console',
         subtitle: 'One session and directory per ticket; the main line gets three short messages',
+        overview: 'Overview', ticketsTab: 'Tickets', sourcesTab: 'Sources', settingsTab: 'Settings',
         refresh: 'Refresh', close: 'Close', openRight: 'Open in right bar', openConsole: 'Open full console',
         queued: 'Queued', running: 'Running', waiting: 'Waiting', done: 'Done', failed: 'Failed',
-        tickets: 'Tickets', noTickets: 'No tickets yet. Enable a source below.',
+        all: 'All', search: 'Search id / title', noMatch: 'No matching tickets',
+        tickets: 'Tickets', noTickets: 'No tickets yet. Enable a source in Sources.',
         source: 'Source', status: 'Status', attempts: 'Attempts', lastError: 'Last error', actions: 'Actions',
         retry: 'Retry', cancel: 'Cancel', session: 'Session', log: 'Log', closeLog: 'Hide log',
         settings: 'Settings', basic: 'Basics', dryRun: 'dryRun (record only)', mainSession: 'Main session id',
-        poll: 'Poll interval (ms)', preset: 'worker preset', repoPath: 'Local git repo path (worktree source)', save: 'Save', saving: 'Saving…', saved: 'Saved (plugin reloads)',
+        poll: 'Poll interval (ms)', preset: 'worker preset', repoPath: 'Local git repo path (worktree source)',
+        save: 'Save', saving: 'Saving…', saved: 'Saved (plugin reloads)', unsaved: 'Unsaved changes',
         github: 'GitHub', feishu: 'Feishu', qq: 'QQ', enabled: 'Enabled', repo: 'Repository owner/name',
         labels: 'Trigger labels (comma separated)', authors: 'Author allowlist (comma separated)', token: 'Token (blank keeps current)',
         tokenSet: 'Configured; blank keeps it', tokenUnset: 'Not set', apiBase: 'API base', confirmWrites: 'Allow write-back',
@@ -47,6 +65,17 @@ window.__ModuleLoader__.load({
         selfId: 'Bot QQ id', httpUrl: 'OneBot HTTP URL', wsUrl: 'OneBot WS URL',
         host: 'Host', port: 'Port', guide: 'Ticket states, actions, and source settings',
         loadFailed: 'Load failed', noHostService: 'Host service unavailable', closeHint: 'Reopen from the left sidebar icon',
+        workspace: 'Workspace', wsPath: 'Path', wsSession: 'Intake session', wsPressure: 'Context usage',
+        wsLastCompact: 'Last compact', wsNever: 'never', wsMissing: 'no intake session', wsRunning: 'running',
+        compactNow: 'Compact now', compacting: 'Compacting…', compactOk: 'Compacted', compactSkip: 'Host says nothing to compact',
+        noWorkspace: 'Enable single-session mode to list one intake session per workspace here.',
+        singleTitle: 'Single-session mode', singleHint: 'Each workspace keeps one intake session; old context is compacted when idle or over the threshold. Workers stay per-ticket.',
+        singleEnabled: 'Enable single-session mode', idleMinutes: 'Compact after idle (minutes)', pressureRatio: 'Compact when context usage exceeds',
+        aggressive: 'Aggressive (keep only recent turns)', keepRecentTurns: 'Turns to keep when aggressive', autoCreate: 'Create an intake session when missing',
+        sessionIdPrefix: 'Session id prefix',
+        recent: 'Recent activity', sourceHealth: 'Source health', noSources: 'No source enabled yet.',
+        stateOk: 'OK', stateFail: 'Error', watermark: 'Watermark', added: 'Added',
+        confirmCompact: 'Compacting may cost one model call. Compact now?',
       },
     }
 
@@ -92,7 +121,7 @@ window.__ModuleLoader__.load({
       return data
     }
 
-    function buildForm(config) {
+    function buildForm(config, singleSession) {
       const g = config.sources.github
       const f = config.sources.feishu
       const q = config.sources.qq
@@ -109,6 +138,15 @@ window.__ModuleLoader__.load({
           personal: { httpUrl: q.personal?.httpUrl || '', wsUrl: q.personal?.wsUrl || '', selfId: q.personal?.selfId || '', snowLumaDir: q.personal?.snowLumaDir || '', hasHttpToken: q.personal?.hasHttpToken, hasWsToken: q.personal?.hasWsToken },
           official: { host: q.official?.host || '127.0.0.1', port: String(q.official?.port || 0), hasToken: q.official?.hasToken, token: '' },
         },
+        single: {
+          enabled: singleSession?.enabled === true,
+          idleMinutes: String(singleSession?.idleMinutes ?? 30),
+          pressureRatio: String(singleSession?.pressureRatio ?? 0.5),
+          aggressive: singleSession?.aggressive === true,
+          keepRecentTurns: String(singleSession?.keepRecentTurns ?? 2),
+          autoCreate: singleSession?.autoCreate !== false,
+          sessionIdPrefix: singleSession?.sessionIdPrefix || 'intake',
+        },
       }
     }
 
@@ -119,6 +157,15 @@ window.__ModuleLoader__.load({
         repoPath: form.repoPath,
         pollIntervalMs: Number(form.pollIntervalMs) || 60000,
         workerPreset: form.workerPreset,
+        singleSession: {
+          enabled: form.single.enabled,
+          idleMinutes: Number(form.single.idleMinutes) || 30,
+          pressureRatio: Number(form.single.pressureRatio) || 0.5,
+          aggressive: form.single.aggressive,
+          keepRecentTurns: Number(form.single.keepRecentTurns) || 0,
+          autoCreate: form.single.autoCreate,
+          sessionIdPrefix: form.single.sessionIdPrefix,
+        },
         sources: {
           github: { enabled: form.github.enabled, repo: form.github.repo, labels: split(form.github.labels), authors: split(form.github.authors), apiBase: form.github.apiBase, confirmWrites: form.github.confirmWrites, token: form.github.token },
           feishu: { enabled: form.feishu.enabled, appId: form.feishu.appId, chatIds: split(form.feishu.chatIds), authors: split(form.feishu.authors), requireMention: form.feishu.requireMention, confirmWrites: form.feishu.confirmWrites, appSecret: form.feishu.appSecret },
@@ -135,23 +182,32 @@ window.__ModuleLoader__.load({
 .syh-root{height:100%;overflow:auto;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:14px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
 .syh-wrap{padding:20px 24px;max-width:1100px}
 .syh-compact{padding:12px 14px}
-.syh-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}
+.syh-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
 .syh-head h1{font-size:18px;margin:0;font-weight:600}
 .syh-sub{color:var(--dsw-alias-label-secondary);font-size:12px;margin-top:2px}
 .syh-grow{flex:1}
-.syh-btn{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border-radius:7px;padding:5px 11px;font:inherit;font-size:12px;cursor:pointer}
+.syh-live{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--dsw-alias-label-secondary);margin-left:8px}
+.syh-dot{width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-state-success-primary);display:inline-block}
+.syh-dot.dry{background:var(--dsw-alias-state-warn-primary)}
+.syh-btn{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border-radius:7px;padding:5px 11px;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}
 .syh-btn:hover{border-color:var(--dsw-alias-border-l2)}
+.syh-btn:disabled{opacity:.5;cursor:default}
 .syh-btn-primary{background:var(--dsw-alias-brand-primary);border-color:transparent;color:#fff}
 .syh-btn-danger{color:var(--dsw-alias-state-error-primary)}
-.syh-stats{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
-.syh-stat{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:9px;padding:8px 12px;min-width:78px}
-.syh-stat b{display:block;font-size:17px}
+.syh-tabs{display:flex;gap:2px;border-bottom:1px solid var(--dsw-alias-border-l1);margin-bottom:16px}
+.syh-tab{border:0;background:none;color:var(--dsw-alias-label-secondary);padding:8px 12px;font:inherit;font-size:13px;cursor:pointer;border-bottom:2px solid transparent}
+.syh-tab.active{color:var(--dsw-alias-label-primary);border-bottom-color:var(--dsw-alias-brand-primary);font-weight:600}
+.syh-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px;margin-bottom:14px}
+.syh-stat{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:9px;padding:9px 12px;cursor:pointer;text-align:left;font:inherit;color:inherit}
+.syh-stat:hover{border-color:var(--dsw-alias-border-l2)}
+.syh-stat b{display:block;font-size:19px;line-height:1.2}
 .syh-stat span{font-size:11px;color:var(--dsw-alias-label-secondary)}
 .syh-card{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:10px;padding:14px 16px;margin-bottom:14px}
 .syh-card h2{font-size:14px;margin:0 0 10px;font-weight:600;display:flex;align-items:center;gap:8px}
 .syh-table{width:100%;border-collapse:collapse;font-size:12px}
 .syh-table th{text-align:left;color:var(--dsw-alias-label-secondary);font-weight:500;padding:5px 7px;border-bottom:1px solid var(--dsw-alias-border-l1)}
-.syh-table td{padding:6px 7px;border-bottom:1px solid var(--dsw-alias-border-l1);vertical-align:top}
+.syh-table td{padding:7px;border-bottom:1px solid var(--dsw-alias-border-l1);vertical-align:top}
+.syh-table tr:hover td{background:var(--dsw-alias-bg-layer-2)}
 .syh-badge{display:inline-block;border-radius:999px;padding:0 8px;line-height:19px;font-size:11px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)}
 .syh-queued{color:var(--dsw-alias-state-warn-primary)}.syh-running{color:var(--dsw-alias-brand-primary)}.syh-waiting{color:var(--dsw-alias-state-warn-primary)}.syh-done{color:var(--dsw-alias-state-success-primary)}.syh-failed{color:var(--dsw-alias-state-error-primary)}
 .syh-err{color:var(--dsw-alias-state-error-primary);font-size:12px;word-break:break-all}
@@ -163,16 +219,31 @@ window.__ModuleLoader__.load({
 .syh-pre{max-height:280px;overflow:auto;background:var(--dsw-alias-bg-layer-2);border-radius:8px;padding:10px;font:12px/1.45 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
 .syh-src{border-top:1px solid var(--dsw-alias-border-l1);padding-top:10px;margin-top:10px}
 .syh-src:first-of-type{border-top:0;padding-top:0;margin-top:0}
-.syh-src-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-weight:600;font-size:13px}
+.syh-src-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-weight:600;font-size:13px;flex-wrap:wrap}
 .syh-msg{font-size:12px;margin-left:8px;color:var(--dsw-alias-state-success-primary)}
+.syh-msgerr{color:var(--dsw-alias-state-error-primary)}
+.syh-bar{height:6px;border-radius:3px;background:var(--dsw-alias-bg-layer-2);overflow:hidden;margin-top:6px}
+.syh-bar > i{display:block;height:100%;background:var(--dsw-alias-brand-primary)}
+.syh-bar.warn > i{background:var(--dsw-alias-state-warn-primary)}
+.syh-bar.bad > i{background:var(--dsw-alias-state-error-primary)}
+.syh-ws{display:grid;grid-template-columns:1fr auto;gap:10px;padding:10px 0;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.syh-ws:last-child{border-bottom:0}
+.syh-ws-path{font-size:13px;font-weight:600;word-break:break-all}
+.syh-ws-meta{font-size:11px;color:var(--dsw-alias-label-secondary);margin-top:2px}
+.syh-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.syh-chip{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);border-radius:999px;padding:3px 10px;font:inherit;font-size:11px;cursor:pointer;color:var(--dsw-alias-label-secondary)}
+.syh-chip.active{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}
+.syh-search{width:100%;padding:6px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:7px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;margin-bottom:10px}
+.syh-savebar{position:sticky;bottom:0;display:flex;align-items:center;gap:8px;background:var(--dsw-alias-bg-base);padding:10px 0 2px;margin-top:4px}
+.syh-empty{padding:18px;text-align:center;color:var(--dsw-alias-label-secondary);font-size:12px}
 `
 
-    function Badge({ status }) {
-      return h('span', { className: `syh-badge syh-${status}` }, status)
+    function Badge({ status, t }) {
+      return h('span', { className: `syh-badge syh-${status}` }, t(status) || status)
     }
 
-    function Stat({ label, value }) {
-      return h('div', { className: 'syh-stat' }, h('b', null, String(value ?? 0)), h('span', null, label))
+    function StatCard({ label, value, onClick }) {
+      return h('button', { className: 'syh-stat', onClick, type: 'button' }, h('b', null, String(value ?? 0)), h('span', null, label))
     }
 
     function Field({ label, children }) {
@@ -187,16 +258,25 @@ window.__ModuleLoader__.load({
       return h('label', { className: 'syh-check' }, h('input', { type: 'checkbox', checked: Boolean(checked), onChange: (event) => onChange(event.target.checked) }), label)
     }
 
+    function PressureBar({ ratio }) {
+      const level = ratio >= 0.85 ? 'bad' : ratio >= 0.5 ? 'warn' : ''
+      return h('div', { className: `syh-bar ${level}` }, h('i', { style: { width: `${Math.min(100, Math.round(ratio * 100))}%` } }))
+    }
+
     function Console({ ctx, compact = false, onClose }) {
       const t = useT(ctx)
       const { data, error: loadError, reload } = useStatus(ctx)
+      const [tab, setTab] = React.useState('overview')
       const [form, setForm] = React.useState(null)
       const [msg, setMsg] = React.useState('')
       const [error, setError] = React.useState('')
       const [log, setLog] = React.useState(null)
+      const [filter, setFilter] = React.useState('all')
+      const [query, setQuery] = React.useState('')
+      const [busySession, setBusySession] = React.useState('')
 
       React.useEffect(() => {
-        if (data?.config && form === null) setForm(buildForm(data.config))
+        if (data?.config && form === null) setForm(buildForm(data.config, data.singleSession))
       }, [data, form])
 
       const setField = (path, value) => {
@@ -209,6 +289,7 @@ window.__ModuleLoader__.load({
           target[keys[keys.length - 1]] = value
           return next
         })
+        setMsg(t('unsaved'))
       }
 
       const run = async (fn, okMessage) => {
@@ -232,10 +313,22 @@ window.__ModuleLoader__.load({
 
       const act = (ticket, action) => run(() => post('/action', { ticketId: ticket.id, action }))
 
-      const openSession = (ticket) => {
+      const compactNow = (sessionId) => run(async () => {
+        if (typeof window !== 'undefined' && typeof window.confirm === 'function' && !window.confirm(t('confirmCompact'))) return
+        setBusySession(sessionId)
+        setMsg(t('compacting'))
+        try {
+          const result = await post('/action', { action: 'compact', sessionId })
+          setMsg(result?.skipped ? t('compactSkip') : t('compactOk'))
+        } finally {
+          setBusySession('')
+        }
+      })
+
+      const openSession = (sessionId) => {
         const workspace = services.workspace
         if (!workspace?.openSession) { setError(t('noHostService')); return }
-        try { workspace.openSession(ticket.sessionId) } catch (reason) { setError(String(reason?.message || reason)) }
+        try { workspace.openSession(sessionId) } catch (reason) { setError(String(reason?.message || reason)) }
       }
 
       const showLog = (ticket) => run(async () => {
@@ -253,12 +346,16 @@ window.__ModuleLoader__.load({
 
       const stats = data?.stats ?? { queued: 0, running: 0, waiting: 0, done: 0, failed: 0 }
       const tickets = [...(data?.tickets ?? [])].reverse()
-      const shown = compact ? tickets.slice(0, 6) : tickets
+      const visibleTabs = compact ? ['overview', 'tickets'] : TABS
 
       const header = h('div', { className: 'syh-head' },
         h('div', { className: 'syh-grow' },
-          h('h1', null, t('title'), ' ', h('span', { className: 'syh-muted', style: { fontSize: 11 } }, 'v' + (data?.config?.version || ''))),
+          h('h1', null, t('title')),
           h('div', { className: 'syh-sub' }, t('subtitle')),
+        ),
+        h('span', { className: 'syh-live' },
+          h('i', { className: `syh-dot ${data?.dryRun ? 'dry' : ''}` }),
+          `v${data?.config?.version || '?'} · ${data?.dryRun ? 'dryRun' : 'live'}`,
         ),
         h('button', { className: 'syh-btn', onClick: () => reload() }, t('refresh')),
         compact
@@ -268,130 +365,257 @@ window.__ModuleLoader__.load({
       )
 
       const statsRow = h('div', { className: 'syh-stats' },
-        h(Stat, { label: t('queued'), value: stats.queued }),
-        h(Stat, { label: t('running'), value: stats.running }),
-        h(Stat, { label: t('waiting'), value: stats.waiting }),
-        h(Stat, { label: t('done'), value: stats.done }),
-        h(Stat, { label: t('failed'), value: stats.failed }),
+        ['queued', 'running', 'waiting', 'done', 'failed'].map((key) => h(StatCard, {
+          key,
+          label: t(key),
+          value: stats[key],
+          onClick: () => { setFilter(key); setTab('tickets') },
+        })),
       )
 
-      const errorBox = (loadError || error || data?.lastError) ? h('div', { className: 'syh-card' },
+      const errorBox = (loadError || error) ? h('div', { className: 'syh-card' },
         loadError ? h('div', { className: 'syh-err' }, t('loadFailed') + '：' + loadError) : null,
         error ? h('div', { className: 'syh-err' }, error) : null,
-        data?.lastError ? h('div', { className: 'syh-err' }, t('lastError') + '：' + data.lastError) : null,
       ) : null
 
-      const ticketTable = h('div', { className: 'syh-card' },
-        h('h2', null, t('tickets'), h('span', { className: 'syh-muted' }, ' (' + tickets.length + ')')),
-        tickets.length === 0
-          ? h('div', { className: 'syh-muted' }, t('noTickets'))
-          : h('table', { className: 'syh-table' },
-              h('thead', null, h('tr', null,
-                h('th', null, t('tickets')),
-                h('th', null, t('status')),
-                h('th', null, t('attempts')),
-                h('th', null, t('lastError')),
-                h('th', null, t('actions')),
-              )),
-              h('tbody', null, shown.map((ticket) => h('tr', { key: ticket.id },
-                h('td', null,
-                  h('code', { style: { fontSize: 11 } }, ticket.id),
-                  h('div', { style: { fontSize: 12 } }, ticket.title || ''),
-                  ticket.question ? h('div', { className: 'syh-err', style: { fontSize: 11 } }, '？' + ticket.question) : null,
-                ),
-                h('td', null, h(Badge, { status: ticket.status })),
-                h('td', null, String(ticket.attempts ?? 0)),
-                h('td', null, ticket.lastError ? h('div', { className: 'syh-err' }, ticket.lastError) : h('span', { className: 'syh-muted' }, '—')),
-                h('td', null,
-                  ticket.status === 'failed' ? h('button', { className: 'syh-btn', onClick: () => act(ticket, 'retry') }, t('retry')) : null,
-                  (ticket.status === 'running' || ticket.status === 'waiting') ? h('button', { className: 'syh-btn syh-btn-danger', onClick: () => act(ticket, 'cancel') }, t('cancel')) : null,
-                  ticket.sessionId ? h('button', { className: 'syh-btn', onClick: () => openSession(ticket) }, t('session')) : null,
-                  h('button', { className: 'syh-btn', onClick: () => showLog(ticket) }, t('log')),
-                ),
-              ))),
-            ),
-        log ? h('div', null,
-          h('div', { className: 'syh-row', style: { marginTop: 10 } }, h('strong', { style: { fontSize: 12 } }, log.id), h('button', { className: 'syh-btn', onClick: () => setLog(null) }, t('closeLog'))),
-          h('pre', { className: 'syh-pre' }, (log.truncated ? '…（只显示最后 200 行）\n' : '') + log.text),
-        ) : null,
-      )
+      const sourceHealth = data?.sources ?? {}
+      const enabledSources = data?.config?.sources ? Object.entries(data.config.sources).filter(([, value]) => value.enabled).map(([key]) => key) : []
 
-      if (compact) {
-        return h('div', { className: 'syh-root syh-compact' },
-          h('style', null, CSS),
-          header, statsRow, errorBox, ticketTable,
-          h('div', { className: 'syh-muted', style: { fontSize: 11 } }, t('closeHint')),
+      function overview() {
+        return h('div', null,
+          statsRow,
+          h('div', { className: 'syh-card' },
+            h('h2', null, t('workspace'), h('span', { className: 'syh-muted' }, ` (${data?.singleSession?.workspaces?.length ?? 0})`)),
+            !data?.singleSession?.enabled
+              ? h('div', { className: 'syh-empty' }, t('noWorkspace'))
+              : (data.singleSession.workspaces ?? []).length === 0
+                ? h('div', { className: 'syh-empty' }, t('noWorkspace'))
+                : data.singleSession.workspaces.map((workspace) => h('div', { className: 'syh-ws', key: workspace.sessionId || workspace.path },
+                    h('div', null,
+                      h('div', { className: 'syh-ws-path', title: workspace.path }, workspace.path),
+                      h('div', { className: 'syh-ws-meta' },
+                        workspace.missing
+                          ? t('wsMissing')
+                          : `${workspace.sessionId} · ${t('wsLastCompact')}: ${workspace.lastCompact ? new Date(workspace.lastCompact.at).toLocaleString() : t('wsNever')}`,
+                      ),
+                      workspace.missing ? null : h('div', { style: { marginTop: 6, minWidth: 220 } },
+                        h('div', { className: 'syh-ws-meta' }, `${t('wsPressure')}: ${workspace.pressureTokens}/${workspace.contextWindow || '?'} (${Math.round((workspace.ratio || 0) * 100)}%)`),
+                        h(PressureBar, { ratio: workspace.ratio || 0 }),
+                      ),
+                    ),
+                    h('div', { style: { display: 'flex', gap: 6, alignItems: 'center' } },
+                      h('span', { className: `syh-badge syh-${workspace.running ? 'running' : workspace.status === 'missing' ? 'failed' : 'done'}` }, workspace.running ? t('wsRunning') : (workspace.status || 'idle')),
+                      workspace.sessionId ? h('button', { className: 'syh-btn', onClick: () => openSession(workspace.sessionId) }, t('session')) : null,
+                      workspace.sessionId ? h('button', { className: 'syh-btn', disabled: busySession === workspace.sessionId, onClick: () => compactNow(workspace.sessionId) }, busySession === workspace.sessionId ? t('compacting') : t('compactNow')) : null,
+                    ),
+                  )),
+          ),
+          h('div', { className: 'syh-card' },
+            h('h2', null, t('sourceHealth')),
+            enabledSources.length === 0
+              ? h('div', { className: 'syh-empty' }, t('noSources'))
+              : enabledSources.map((key) => {
+                  const health = sourceHealth[key] ?? {}
+                  return h('div', { key, className: 'syh-ws' },
+                    h('div', null,
+                      h('div', { className: 'syh-ws-path' }, key),
+                      h('div', { className: 'syh-ws-meta' }, `${t('watermark')}: ${health.watermark ? new Date(health.watermark).toLocaleString() : '—'} · ${t('added')}: ${health.added ?? 0}`),
+                    ),
+                    h('span', { className: `syh-badge ${health.ok === undefined ? '' : health.ok ? 'syh-done' : 'syh-failed'}` }, health.ok === undefined ? '—' : health.ok ? t('stateOk') : t('stateFail')),
+                  )
+                }),
+            data?.lastError ? h('div', { className: 'syh-err', style: { marginTop: 8 } }, data.lastError) : null,
+          ),
+          h('div', { className: 'syh-card' },
+            h('h2', null, t('recent')),
+            tickets.length === 0
+              ? h('div', { className: 'syh-empty' }, t('noTickets'))
+              : tickets.slice(0, 10).map((ticket) => h('div', { key: ticket.id, className: 'syh-ws' },
+                  h('div', null,
+                    h('div', { className: 'syh-ws-path', style: { fontSize: 12, fontWeight: 500 } }, ticket.title || ticket.id),
+                    h('div', { className: 'syh-ws-meta' }, `${ticket.id} · ${new Date(ticket.createdAt || Date.now()).toLocaleString()}`),
+                  ),
+                  h(Badge, { status: ticket.status, t }),
+                )),
+          ),
         )
       }
 
-      const settings = form ? h('div', { className: 'syh-card' },
-        h('h2', null, t('settings')),
-        h('div', { className: 'syh-row' },
-          h(Check, { label: t('dryRun'), checked: form.dryRun, onChange: (v) => setField('dryRun', v) }),
-          h(Field, { label: t('mainSession') }, h(TextInput, { value: form.mainSessionId, onChange: (v) => setField('mainSessionId', v) })),
-          h(Field, { label: t('repoPath') }, h(TextInput, { value: form.repoPath, onChange: (v) => setField('repoPath', v) })),
-          h(Field, { label: t('poll') }, h(TextInput, { type: 'number', value: form.pollIntervalMs, onChange: (v) => setField('pollIntervalMs', v) })),
-          h(Field, { label: t('preset') }, h(TextInput, { value: form.workerPreset, onChange: (v) => setField('workerPreset', v) })),
-        ),
-        sourceBlock('github', t('github'), form.github, (key, value) => setField('github.' + key, value), [
-          ['repo', t('repo')], ['labels', t('labels')], ['authors', t('authors')], ['apiBase', t('apiBase')],
-        ], t('tokenSet'), t('tokenUnset')),
-        sourceBlock('feishu', t('feishu'), form.feishu, (key, value) => setField('feishu.' + key, value), [
-          ['appId', t('appId')], ['chatIds', t('chatIds')], ['authors', t('authors')],
-        ], t('tokenSet'), t('tokenUnset')),
-        qqBlock(),
-        h('div', { className: 'syh-row', style: { marginTop: 4 } },
-          h('button', { className: 'syh-btn syh-btn-primary', onClick: save }, t('save')),
-          msg ? h('span', { className: 'syh-msg' }, msg) : null,
-        ),
-      ) : h('div', { className: 'syh-card syh-muted' }, t('loadFailed'))
+      function matchFilter(ticket) {
+        if (filter !== 'all' && ticket.status !== filter) return false
+        if (!query.trim()) return true
+        const needle = query.trim().toLowerCase()
+        return ticket.id.toLowerCase().includes(needle) || String(ticket.title || '').toLowerCase().includes(needle)
+      }
 
-      function sourceBlock(kind, label, section, set, fields, tokenSetText, tokenUnsetText) {
-        return h('div', { className: 'syh-src' },
-          h('div', { className: 'syh-src-head' }, label, h(Check, { label: t('enabled'), checked: section.enabled, onChange: (v) => set('enabled', v) }), h(Check, { label: t('confirmWrites'), checked: section.confirmWrites, onChange: (v) => set('confirmWrites', v) })),
-          h('div', { className: 'syh-row' }, fields.map(([key, fieldLabel]) => h(Field, { key, label: fieldLabel }, h(TextInput, { value: section[key], onChange: (v) => set(key, v) })))),
-          kind === 'github' ? h('div', { className: 'syh-row' },
-            h(Field, { label: t('token') }, h(TextInput, { type: 'password', value: section.token, placeholder: section.hasToken ? tokenSetText : tokenUnsetText, onChange: (v) => set('token', v) })),
-          ) : null,
-          kind === 'feishu' ? h('div', { className: 'syh-row' },
-            h(Field, { label: t('appSecret') }, h(TextInput, { type: 'password', value: section.appSecret, placeholder: section.hasSecret ? tokenSetText : tokenUnsetText, onChange: (v) => set('appSecret', v) })),
-          ) : null,
+      function ticketsView() {
+        const list = tickets.filter(matchFilter)
+        return h('div', null,
+          h('div', { className: 'syh-chips' },
+            ['all', 'queued', 'running', 'waiting', 'done', 'failed'].map((key) => h('button', {
+              key,
+              className: `syh-chip ${filter === key ? 'active' : ''}`,
+              onClick: () => setFilter(key),
+            }, key === 'all' ? t('all') : t(key))),
+          ),
+          h('input', { className: 'syh-search', value: query, placeholder: t('search'), onChange: (event) => setQuery(event.target.value) }),
+          h('div', { className: 'syh-card' },
+            list.length === 0
+              ? h('div', { className: 'syh-empty' }, query ? t('noMatch') : t('noTickets'))
+              : h('table', { className: 'syh-table' },
+                  h('thead', null, h('tr', null,
+                    h('th', null, t('tickets')),
+                    h('th', null, t('source')),
+                    h('th', null, t('status')),
+                    h('th', null, t('attempts')),
+                    h('th', null, t('lastError')),
+                    h('th', null, t('actions')),
+                  )),
+                  h('tbody', null, list.map((ticket) => h('tr', { key: ticket.id },
+                    h('td', null,
+                      h('code', { style: { fontSize: 11 } }, ticket.id),
+                      h('div', { style: { fontSize: 12 } }, ticket.title || ''),
+                      ticket.question ? h('div', { className: 'syh-err', style: { fontSize: 11 } }, '？' + ticket.question) : null,
+                    ),
+                    h('td', null, h('span', { className: 'syh-muted' }, ticket.source)),
+                    h('td', null, h(Badge, { status: ticket.status, t })),
+                    h('td', null, String(ticket.attempts ?? 0)),
+                    h('td', null, ticket.lastError ? h('div', { className: 'syh-err' }, ticket.lastError) : h('span', { className: 'syh-muted' }, '—')),
+                    h('td', null,
+                      h('div', { style: { display: 'flex', gap: 5, flexWrap: 'wrap' } },
+                        ticket.status === 'failed' ? h('button', { className: 'syh-btn', onClick: () => act(ticket, 'retry') }, t('retry')) : null,
+                        (ticket.status === 'running' || ticket.status === 'waiting') ? h('button', { className: 'syh-btn syh-btn-danger', onClick: () => act(ticket, 'cancel') }, t('cancel')) : null,
+                        ticket.sessionId ? h('button', { className: 'syh-btn', onClick: () => openSession(ticket.sessionId) }, t('session')) : null,
+                        h('button', { className: 'syh-btn', onClick: () => showLog(ticket) }, t('log')),
+                      ),
+                    ),
+                  ))),
+                ),
+            log ? h('div', null,
+              h('div', { className: 'syh-row', style: { marginTop: 10 } },
+                h('strong', { style: { fontSize: 12 } }, log.id),
+                h('button', { className: 'syh-btn', onClick: () => setLog(null) }, t('closeLog')),
+              ),
+              h('pre', { className: 'syh-pre' }, (log.truncated ? '…（只显示最后 200 行）\n' : '') + log.text),
+            ) : null,
+          ),
         )
       }
 
-      function qqBlock() {
-        const q = form.qq
+      function sourceCard(title, section, fields, extra) {
         return h('div', { className: 'syh-src' },
-          h('div', { className: 'syh-src-head' }, t('qq'),
-            h(Check, { label: t('enabled'), checked: q.enabled, onChange: (v) => setField('qq.enabled', v) }),
-            h(Field, { label: t('mode') }, h('select', { value: q.mode, onChange: (e) => setField('qq.mode', e.target.value) },
-              h('option', { value: 'personal' }, t('personal')),
-              h('option', { value: 'official' }, t('official')),
-            )),
-            h(Check, { label: t('requireAt'), checked: q.requireAt, onChange: (v) => setField('qq.requireAt', v) }),
-            h(Check, { label: t('confirmWrites'), checked: q.confirmWrites, onChange: (v) => setField('qq.confirmWrites', v) }),
+          h('div', { className: 'syh-src-head' }, title,
+            h(Check, { label: t('enabled'), checked: section.enabled, onChange: (v) => setField(`${section.key}.enabled`, v) }),
+            h(Check, { label: t('confirmWrites'), checked: section.confirmWrites, onChange: (v) => setField(`${section.key}.confirmWrites`, v) }),
           ),
           h('div', { className: 'syh-row' },
-            h(Field, { label: t('authors') }, h(TextInput, { value: q.authors, onChange: (v) => setField('qq.authors', v) })),
-            h(Field, { label: t('labels') }, h(TextInput, { value: q.allowedGroups, onChange: (v) => setField('qq.allowedGroups', v) })),
+            fields.map(([key, label]) => h(Field, { key, label }, h(TextInput, { value: section[key], onChange: (v) => setField(`${section.key}.${key}`, v) }))),
           ),
-          q.mode === 'personal'
-            ? h('div', { className: 'syh-row' },
-                h(Field, { label: t('httpUrl') }, h(TextInput, { value: q.personal.httpUrl, onChange: (v) => setField('qq.personal.httpUrl', v) })),
-                h(Field, { label: t('wsUrl') }, h(TextInput, { value: q.personal.wsUrl, onChange: (v) => setField('qq.personal.wsUrl', v) })),
-                h(Field, { label: t('selfId') }, h(TextInput, { value: q.personal.selfId, onChange: (v) => setField('qq.personal.selfId', v) })),
-              )
-            : h('div', { className: 'syh-row' },
-                h(Field, { label: t('host') }, h(TextInput, { value: q.official.host, onChange: (v) => setField('qq.official.host', v) })),
-                h(Field, { label: t('port') }, h(TextInput, { type: 'number', value: q.official.port, onChange: (v) => setField('qq.official.port', v) })),
-                h(Field, { label: t('token') }, h(TextInput, { type: 'password', value: q.official.token, placeholder: q.official.hasToken ? t('tokenSet') : t('tokenUnset'), onChange: (v) => setField('qq.official.token', v) })),
-              ),
+          extra ?? null,
         )
       }
 
-      return h('div', { className: 'syh-root' },
+      function sourcesView() {
+        if (!form) return h('div', { className: 'syh-empty' }, t('loadFailed'))
+        return h('div', { className: 'syh-card' },
+          h('h2', null, t('sourcesTab')),
+          sourceCard(t('github'), { ...form.github, key: 'github' }, [
+            ['repo', t('repo')], ['labels', t('labels')], ['authors', t('authors')], ['apiBase', t('apiBase')],
+          ], h('div', { className: 'syh-row' },
+            h(Field, { label: t('token') }, h(TextInput, { type: 'password', value: form.github.token, placeholder: form.github.hasToken ? t('tokenSet') : t('tokenUnset'), onChange: (v) => setField('github.token', v) })),
+          )),
+          sourceCard(t('feishu'), { ...form.feishu, key: 'feishu' }, [
+            ['appId', t('appId')], ['chatIds', t('chatIds')], ['authors', t('authors')],
+          ], h('div', { className: 'syh-row' },
+            h(Field, { label: t('appSecret') }, h(TextInput, { type: 'password', value: form.feishu.appSecret, placeholder: form.feishu.hasSecret ? t('tokenSet') : t('tokenUnset'), onChange: (v) => setField('feishu.appSecret', v) })),
+            h(Check, { label: t('requireMention'), checked: form.feishu.requireMention, onChange: (v) => setField('feishu.requireMention', v) }),
+          )),
+          h('div', { className: 'syh-src' },
+            h('div', { className: 'syh-src-head' }, t('qq'),
+              h(Check, { label: t('enabled'), checked: form.qq.enabled, onChange: (v) => setField('qq.enabled', v) }),
+              h(Field, { label: t('mode') }, h('select', { value: form.qq.mode, onChange: (e) => setField('qq.mode', e.target.value) },
+                h('option', { value: 'personal' }, t('personal')),
+                h('option', { value: 'official' }, t('official')),
+              )),
+              h(Check, { label: t('requireAt'), checked: form.qq.requireAt, onChange: (v) => setField('qq.requireAt', v) }),
+              h(Check, { label: t('confirmWrites'), checked: form.qq.confirmWrites, onChange: (v) => setField('qq.confirmWrites', v) }),
+            ),
+            h('div', { className: 'syh-row' },
+              h(Field, { label: t('authors') }, h(TextInput, { value: form.qq.authors, onChange: (v) => setField('qq.authors', v) })),
+              h(Field, { label: t('labels') }, h(TextInput, { value: form.qq.allowedGroups, onChange: (v) => setField('qq.allowedGroups', v) })),
+            ),
+            form.qq.mode === 'personal'
+              ? h('div', { className: 'syh-row' },
+                  h(Field, { label: t('httpUrl') }, h(TextInput, { value: form.qq.personal.httpUrl, onChange: (v) => setField('qq.personal.httpUrl', v) })),
+                  h(Field, { label: t('wsUrl') }, h(TextInput, { value: form.qq.personal.wsUrl, onChange: (v) => setField('qq.personal.wsUrl', v) })),
+                  h(Field, { label: t('selfId') }, h(TextInput, { value: form.qq.personal.selfId, onChange: (v) => setField('qq.personal.selfId', v) })),
+                )
+              : h('div', { className: 'syh-row' },
+                  h(Field, { label: t('host') }, h(TextInput, { value: form.qq.official.host, onChange: (v) => setField('qq.official.host', v) })),
+                  h(Field, { label: t('port') }, h(TextInput, { type: 'number', value: form.qq.official.port, onChange: (v) => setField('qq.official.port', v) })),
+                  h(Field, { label: t('token') }, h(TextInput, { type: 'password', value: form.qq.official.token, placeholder: form.qq.official.hasToken ? t('tokenSet') : t('tokenUnset'), onChange: (v) => setField('qq.official.token', v) })),
+                ),
+          ),
+          saveBar(),
+        )
+      }
+
+      function settingsView() {
+        if (!form) return h('div', { className: 'syh-empty' }, t('loadFailed'))
+        const s = form.single
+        return h('div', null,
+          h('div', { className: 'syh-card' },
+            h('h2', null, t('basic')),
+            h('div', { className: 'syh-row' },
+              h(Check, { label: t('dryRun'), checked: form.dryRun, onChange: (v) => setField('dryRun', v) }),
+              h(Field, { label: t('mainSession') }, h(TextInput, { value: form.mainSessionId, onChange: (v) => setField('mainSessionId', v) })),
+              h(Field, { label: t('repoPath') }, h(TextInput, { value: form.repoPath, onChange: (v) => setField('repoPath', v) })),
+              h(Field, { label: t('poll') }, h(TextInput, { type: 'number', value: form.pollIntervalMs, onChange: (v) => setField('pollIntervalMs', v) })),
+              h(Field, { label: t('preset') }, h(TextInput, { value: form.workerPreset, onChange: (v) => setField('workerPreset', v) })),
+            ),
+          ),
+          h('div', { className: 'syh-card' },
+            h('h2', null, t('singleTitle')),
+            h('div', { className: 'syh-muted', style: { fontSize: 12, marginBottom: 10 } }, t('singleHint')),
+            h('div', { className: 'syh-row' },
+              h(Check, { label: t('singleEnabled'), checked: s.enabled, onChange: (v) => setField('single.enabled', v) }),
+              h(Check, { label: t('autoCreate'), checked: s.autoCreate, onChange: (v) => setField('single.autoCreate', v) }),
+              h(Check, { label: t('aggressive'), checked: s.aggressive, onChange: (v) => setField('single.aggressive', v) }),
+            ),
+            h('div', { className: 'syh-row' },
+              h(Field, { label: t('idleMinutes') }, h(TextInput, { type: 'number', value: s.idleMinutes, onChange: (v) => setField('single.idleMinutes', v) })),
+              h(Field, { label: t('pressureRatio') }, h(TextInput, { type: 'number', value: s.pressureRatio, onChange: (v) => setField('single.pressureRatio', v) })),
+              h(Field, { label: t('keepRecentTurns') }, h(TextInput, { type: 'number', value: s.keepRecentTurns, onChange: (v) => setField('single.keepRecentTurns', v) })),
+              h(Field, { label: t('sessionIdPrefix') }, h(TextInput, { value: s.sessionIdPrefix, onChange: (v) => setField('single.sessionIdPrefix', v) })),
+            ),
+          ),
+          saveBar(),
+        )
+      }
+
+      function saveBar() {
+        return h('div', { className: 'syh-savebar' },
+          h('button', { className: 'syh-btn syh-btn-primary', onClick: save, disabled: !form }, t('save')),
+          msg ? h('span', { className: `syh-msg ${error ? 'syh-msgerr' : ''}` }, msg) : null,
+          error ? h('span', { className: 'syh-msg syh-msgerr' }, error) : null,
+        )
+      }
+
+      const body = tab === 'overview' ? overview() : tab === 'tickets' ? ticketsView() : tab === 'sources' ? sourcesView() : settingsView()
+
+      return h('div', { className: `syh-root ${compact ? 'syh-compact' : ''}` },
         h('style', null, CSS),
-        h('div', { className: 'syh-wrap' }, header, statsRow, errorBox, ticketTable, settings),
+        h('div', { className: compact ? '' : 'syh-wrap' },
+          header,
+          errorBox,
+          h('div', { className: 'syh-tabs' }, visibleTabs.map((key) => h('button', {
+            key,
+            className: `syh-tab ${tab === key ? 'active' : ''}`,
+            onClick: () => setTab(key),
+          }, t(key === 'tickets' ? 'ticketsTab' : key === 'sources' ? 'sourcesTab' : key === 'settings' ? 'settingsTab' : 'overview')))),
+          body,
+          compact ? h('div', { className: 'syh-muted', style: { fontSize: 11, marginTop: 8 } }, t('closeHint')) : null,
+        ),
       )
     }
 

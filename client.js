@@ -46,7 +46,7 @@ window.__ModuleLoader__.load({
         confirmCompact: '压缩可能消耗一次模型调用，确定现在压缩？',
         boardTitle: 'Superagent 工单', boardRunning: '进行中 {count}', boardPending: '待处理 {count}', boardTotal: '共 {count}',
         capsule: '单会话', capsuleOn: '单会话已开：各工作区的接单会话已顶置', capsuleOff: '单会话已关：已取消顶置',
-        pill: '超级智能体', pillTip: '点亮：把本会话设为本工作区的单会话', pillOnTip: '本工作区已登记这个单会话；删除请到控制台',
+        pill: '超级智能体', pillTip: '点亮：把本会话设为本工作区的单会话', pillOnTip: '本工作区已登记这个单会话；删除请到控制台', pillNoWorkspace: '这个会话还没有工作区归属，点亮会失败；先在工作区里新建会话',
       },
       en: {
         title: 'Superagent console',
@@ -83,7 +83,7 @@ window.__ModuleLoader__.load({
         confirmCompact: 'Compacting may cost one model call. Compact now?',
         boardTitle: 'Superagent tickets', boardRunning: '{count} running', boardPending: '{count} queued', boardTotal: '{count} total',
         capsule: 'Single session', capsuleOn: 'Single session on: intake sessions pinned to the top', capsuleOff: 'Single session off: pins removed',
-        pill: 'Superagent', pillTip: 'Turn on: make this session the single session of this workspace', pillOnTip: 'Registered as this workspace single session; delete from the console',
+        pill: 'Superagent', pillTip: 'Turn on: make this session the single session of this workspace', pillOnTip: 'Registered as this workspace single session; delete from the console', pillNoWorkspace: 'This session has no workspace yet; create it inside a workspace first',
       },
     }
 
@@ -314,15 +314,15 @@ window.__ModuleLoader__.load({
           setBusy(false)
         }
       }
-      if (!state?.ok || state.enabled !== true) return null
-      if (!state.registered && state.workspaceOccupied) return null
-      if (!state.registered && !state.workspaceId) return null
-      const on = state.registered === true
+      if (state && (!state.ok || state.enabled !== true)) return null
+      if (state && !state.registered && state.workspaceOccupied) return null
+      const on = state?.registered === true
+      const title = state ? (on ? t('pillOnTip') : state.workspaceId ? t('pillTip') : t('pillNoWorkspace')) : t('pill')
       return h('button', {
         type: 'button',
         className: `sysp ${on ? 'on' : ''}`,
         disabled: on || busy,
-        title: on ? t('pillOnTip') : t('pillTip'),
+        title,
         onClick: on ? undefined : turnOn,
       }, h('style', null, PILL_CSS), h('i', null), t('pill'))
     }

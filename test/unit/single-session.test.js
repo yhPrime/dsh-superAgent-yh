@@ -68,8 +68,10 @@ function harness({ single = {}, sessions = [], workspaces = [{ id: 'w1', path: '
       getAgent: () => agent,
       getPressure: () => pressure,
       readEvents: async () => [1, 5, 9, 13].map((seq) => ({ event: { type: 'turn/start', seq } })),
-      compact: async () => { calls.compact += 1; return { ok: true } },
-      compactRegion: async () => { calls.region += 1; return { ok: true } },
+      getCompaction: () => ({
+        compactNow: async () => { calls.compact += 1; return { ok: true } },
+        compactRegion: async () => { calls.region += 1; return { ok: true } },
+      }),
       createSession: async (request) => { calls.created.push(request); return { sessionId: request.sessionId } },
       resolveAgent: async () => ({ agent }),
     },
@@ -96,6 +98,14 @@ test('维护器：已有接单会话则复用，不重复建', async () => {
   const snap = await h.maintainer.snapshot()
   assert.equal(snap.workspaces[0].sessionId, id)
   assert.equal(h.calls.created.length, 0)
+})
+
+test('维护器：不把同目录无关会话当接单会话（autoCreate=false 时标记缺失）', async () => {
+  const h = harness({ single: { autoCreate: false }, sessions: [{ sessionId: 'session-unrelated', cwd: 'C:/repo' }] })
+  const snap = await h.maintainer.snapshot()
+  assert.equal(snap.workspaces[0].sessionId, null)
+  assert.equal(snap.workspaces[0].missing, true)
+  assert.equal(h.calls.compact, 0)
 })
 
 test('维护器：空闲到点会压缩并记账；运行中不压', async () => {
@@ -136,11 +146,31 @@ test('维护器：宿主说没什么可压（返回 null）时不记账', async 
       getState: async () => ({ running: false, queue: [], pendingInput: [], cursor: 1 }),
       getAgent: () => ({ session: {} }),
       getPressure: () => ({ pressureTokens: 900, contextWindow: 1000 }),
-      compact: async () => null,
+      getCompaction: () => ({ compactNow: async () => null }),
     },
   })
   const out = await m.maintain()
   assert.equal(out.workspaces[0].compactResult.skipped, true)
+  assert.deepEqual(store.state.singleSession, {})
+})
+
+test('preset 没挂 compaction 时不压缩并报明确原因', async () => {
+  const id = intakeIdOf('intake', 'C:/repo')
+  const store = { state: { singleSession: {}, lastError: null }, save() {} }
+  const config = normalizeConfig({ singleSession: { enabled: true, pressureRatio: 0.1 } })
+  const m = createSingleSessionMaintainer({
+    ctx: {}, config, store, log: () => {}, redact: (x) => x,
+    deps: {
+      listWorkspaces: () => [{ id: 'w1', path: 'C:/repo' }],
+      listSessions: async () => [{ sessionId: id, cwd: 'C:/repo' }],
+      getState: async () => ({ running: false, queue: [], pendingInput: [], cursor: 1 }),
+      getAgent: () => ({ session: {} }),
+      getPressure: () => ({ pressureTokens: 900, contextWindow: 1000 }),
+      getCompaction: () => null,
+    },
+  })
+  const out = await m.maintain()
+  assert.match(out.workspaces[0].error, /compaction/)
   assert.deepEqual(store.state.singleSession, {})
 })
 

@@ -66,6 +66,34 @@ test('mergeSettings 后仍走配置校验（启用 GitHub 但缺 repo 会抛）'
   assert.throws(() => normalizeConfig(next), ConfigError)
 })
 
+test('mergeSettings：singleSession 开关与参数按类型合并', () => {
+  const next = mergeSettings(base(), {
+    singleSession: { enabled: true, idleMinutes: 10, pressureRatio: 0.4, aggressive: true, keepRecentTurns: 3, autoCreate: false, sessionIdPrefix: 'ask' },
+  })
+  assert.equal(next.singleSession.enabled, true)
+  assert.equal(next.singleSession.idleMinutes, 10)
+  assert.equal(next.singleSession.pressureRatio, 0.4)
+  assert.equal(next.singleSession.aggressive, true)
+  assert.equal(next.singleSession.keepRecentTurns, 3)
+  assert.equal(next.singleSession.autoCreate, false)
+  assert.equal(next.singleSession.sessionIdPrefix, 'ask')
+  // 非法值被忽略，不写坏配置
+  const kept = mergeSettings(next, { singleSession: { idleMinutes: 'abc', enabled: 'yes' } })
+  assert.equal(kept.singleSession.idleMinutes, 10)
+  assert.equal(kept.singleSession.enabled, true)
+})
+
+test('mergeSettings：singleSession 非法数值经校验会抛', () => {
+  const next = mergeSettings(base(), { singleSession: { pressureRatio: 2 } })
+  assert.throws(() => normalizeConfig(next), ConfigError)
+})
+
+test('configView 暴露 singleSession 配置', () => {
+  const view = configView(normalizeConfig({ singleSession: { enabled: true, idleMinutes: 12 } }))
+  assert.equal(view.singleSession.enabled, true)
+  assert.equal(view.singleSession.idleMinutes, 12)
+})
+
 test('configView 不回明文 token，只给 hasToken', () => {
   const config = base()
   config.sources.github.token = 'secret-gh'

@@ -1,7 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { mergeSettings, configView } from '../../lib/panel.js'
 import { normalizeConfig, ConfigError } from '../../lib/config.js'
+
+const VERSION = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version
 
 const base = () => normalizeConfig({ dryRun: true })
 
@@ -69,5 +72,5 @@ test('configView 不回明文 token，只给 hasToken', () => {
   assert.equal(view.sources.github.hasToken, true)
   assert.equal(view.sources.feishu.hasSecret, true)
   assert.equal(view.sources.qq.official.hasToken, true)
-  assert.equal(view.version, '0.3.0')
+  assert.equal(view.version, VERSION)
 })

@@ -51,6 +51,7 @@ window.__ModuleLoader__.load({
     }
 
     const split = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean)
+    const services = { right: null, workspace: null }
 
     function useT(ctx) {
       const [, force] = React.useReducer((x) => x + 1, 0)
@@ -230,7 +231,7 @@ window.__ModuleLoader__.load({
       const act = (ticket, action) => run(() => post('/action', { ticketId: ticket.id, action }))
 
       const openSession = (ticket) => {
-        const workspace = ctx.get('uiWorkspace')
+        const workspace = services.workspace
         if (!workspace?.openSession) { setError(t('noHostService')); return }
         try { workspace.openSession(ticket.sessionId) } catch (reason) { setError(String(reason?.message || reason)) }
       }
@@ -243,7 +244,7 @@ window.__ModuleLoader__.load({
       })
 
       const openRight = () => {
-        const right = ctx.get('sidebarRight')
+        const right = services.right
         if (!right?.openTab) { setError(t('noHostService')); return }
         try { right.openTab(NS) } catch (reason) { setError(String(reason?.message || reason)) }
       }
@@ -413,9 +414,13 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      inject: ['slots'],
+      inject: ['slots', 'layout', 'locale'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh: DICT.zh, en: DICT.en }))
+
+        ctx.inject(['uiWorkspace'], (child) => {
+          services.workspace = child.get('uiWorkspace') ?? child.uiWorkspace ?? null
+        })
 
         ctx.slots.inject('main', () => ctx.slots.register({
           name: 'main',
@@ -433,6 +438,7 @@ window.__ModuleLoader__.load({
 
         ctx.inject(['sidebarRightTabs', 'sidebarRight'], (child) => {
           const tabs = child.get('sidebarRightTabs') ?? child.sidebarRightTabs
+          services.right = child.get('sidebarRight') ?? child.sidebarRight ?? null
           if (!tabs || typeof tabs.register !== 'function') return
           child.effect(() => tabs.register({
             id: NS,

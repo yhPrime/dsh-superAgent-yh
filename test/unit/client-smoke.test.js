@@ -21,7 +21,7 @@ function loadClient() {
 
 test('client 模块：注册左栏图标、主面板、右侧页签类型', () => {
   const mod = loadClient()
-  assert.deepEqual(mod.inject, ['slots'])
+  assert.deepEqual(mod.inject, ['slots', 'layout', 'locale'])
 
   const slots = []
   const tabTypes = []

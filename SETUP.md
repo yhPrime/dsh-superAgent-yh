@@ -46,7 +46,7 @@
 
 ## 4 验收
 
-1. 打开 `http://<宿主地址>/dsh-superAgent-yh`，应看到面板；
+1. 打开 `http://<宿主地址>/dsh-superagent-yh`，应看到面板；
 2. 在源里造一条符合条件的事件，等一个轮询周期，面板应出现 `queued` 工单（dryRun 下不会真跑）；
 3. 把 `dryRun` 改 false、`mainSessionId` 填一个已存在的会话（或留空只看面板）；
 4. 再触发一次：面板出现 `running`，worker 会话 `worker-<id>` 出现，worktree 在 `<stateDir>/work/<id>`；

@@ -14,7 +14,7 @@
 - **隔离执行**：`worker-<ticketId>` 独立会话 + `workRoot/<ticketId>` 独立 git worktree
 - **主线三条短消息**：开工 1 条、需要人 1 条（含问题）、完成 1 条（含链接/摘要）
 - **幂等**：ticket id 去重 + 水位推进 + 跨重启保留状态
-- **可见**：面板 `/dsh-superAgent-yh`（三态 + 最后错误 + 按源分组）与只读工具 `superagent_status`
+- **可见**：面板 `/dsh-superagent-yh`（三态 + 最后错误 + 按源分组）与只读工具 `superagent_status`
 
 ## 安装
 

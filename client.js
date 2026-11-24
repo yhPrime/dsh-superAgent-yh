@@ -274,14 +274,24 @@ window.__ModuleLoader__.load({
       return h('label', { className: 'syh-check' }, h('input', { type: 'checkbox', checked: Boolean(checked), onChange: (event) => onChange(event.target.checked) }), label)
     }
 
-    // 会话输入区权限右侧的「超级智能体」胶囊：点亮即把本会话登记为该工作区唯一的单会话。
+    // 输入区权限右侧的小图标按钮：点亮即把本会话登记为该工作区唯一的单会话。
     const PILL_CSS = `
-.sysp{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);border-radius:999px;padding:2px 10px;font:12px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;cursor:pointer;user-select:none;white-space:nowrap}
-.sysp:hover:not(:disabled){border-color:var(--dsw-alias-border-l2)}
-.sysp:disabled{cursor:default;opacity:.85}
-.sysp.on{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 10%,transparent)}
-.sysp i{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+.sysi{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.sysi:hover:not(:disabled){background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
+.sysi:disabled{cursor:default;opacity:.7}
+.sysi.on{color:var(--dsw-alias-brand-primary)}
+.sysi.on:hover{background:color-mix(in srgb,var(--dsw-alias-brand-primary) 12%,transparent)}
 `
+
+    function SuperagentGlyph({ size = 16 }) {
+      return h('svg', { width: size, height: size, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true, style: { display: 'block' } },
+        h('circle', { cx: 8, cy: 8, r: 2.1, stroke: 'currentColor', strokeWidth: 1.2 }),
+        h('circle', { cx: 8, cy: 2.6, r: 1.5, stroke: 'currentColor', strokeWidth: 1.2 }),
+        h('circle', { cx: 3.1, cy: 12, r: 1.5, stroke: 'currentColor', strokeWidth: 1.2 }),
+        h('circle', { cx: 12.9, cy: 12, r: 1.5, stroke: 'currentColor', strokeWidth: 1.2 }),
+        h('path', { d: 'M8 5.9V6.9M6.4 9.2 4.3 10.9M9.6 9.2l2.1 1.7', stroke: 'currentColor', strokeWidth: 1.1, strokeLinecap: 'round' }),
+      )
+    }
 
     function SingleSessionPill(props) {
       const t = useT(props.ctx)
@@ -295,7 +305,7 @@ window.__ModuleLoader__.load({
           if (!response.ok) return
           setState(await response.json())
         } catch {
-          /* 状态拿不到就不显示胶囊 */
+          /* 状态拿不到就不显示 */
         }
       }, [sessionId])
       React.useEffect(() => {
@@ -320,11 +330,12 @@ window.__ModuleLoader__.load({
       const title = state ? (on ? t('pillOnTip') : state.workspaceId ? t('pillTip') : t('pillNoWorkspace')) : t('pill')
       return h('button', {
         type: 'button',
-        className: `sysp ${on ? 'on' : ''}`,
-        disabled: on || busy,
+        className: `sysi ${on ? 'on' : ''}`,
+        disabled: on || busy || !sessionId,
         title,
+        'aria-label': t('pill'),
         onClick: on ? undefined : turnOn,
-      }, h('style', null, PILL_CSS), h('i', null), t('pill'))
+      }, h('style', null, PILL_CSS), h(SuperagentGlyph, null))
     }
 
     function PressureBar({ ratio }) {
@@ -841,9 +852,9 @@ window.__ModuleLoader__.load({
           inject: () => ({ ctx }),
         }, SessionBoard))
 
-        // 官方文档建议：简单控件优先放有实际空间的 composer.dock（输入框下方的环境区）。
-        ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({
-          name: 'conversation.composer.dock',
+        // 输入区权限右侧的**小图标按钮**（紧凑行只放得下图标）：点亮即登记本工作区唯一单会话。
+        ctx.slots.inject('conversation.input.right', () => ctx.slots.register({
+          name: 'conversation.input.right',
           id: NS,
           order: 10,
           locale: NS,

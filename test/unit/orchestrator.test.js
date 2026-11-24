@@ -5,15 +5,20 @@ import { normalizeConfig } from '../../lib/config.js'
 
 const ticket = { id: 'github:issue-1', source: 'github', thread: 'issue-1', actor: 'yh', title: '修个 bug', body: '出错了', url: 'https://x/1', attempts: 0 }
 
-function harness({ config = {}, records = [], promptThrows = false } = {}) {
+function harness({ config = {}, text = '', callThrows = false, modelCall = true } = {}) {
   const store = { state: { tickets: { 'github:issue-0': { id: 'github:issue-0', thread: 'issue-1', status: 'running', title: '旧活' } }, lastError: null }, save() {} }
-  const calls = { prompt: 0, wait: 0 }
+  const calls = { call: 0 }
+  const deps = modelCall
+    ? {
+        call: async () => {
+          calls.call += 1
+          if (callThrows) throw new Error('model failed')
+          return text
+        },
+      }
+    : {}
   const orch = createOrchestrator({
-    ctx: {}, config: normalizeConfig(config), store, log: () => {}, redact: (x) => x,
-    deps: {
-      prompt: async () => { calls.prompt += 1; if (promptThrows) throw new Error('prompt failed') },
-      wait: async () => { calls.wait += 1; return { reason: 'idle', output: { records } } },
-    },
+    ctx: {}, config: normalizeConfig(config), store, log: () => {}, redact: (x) => x, deps,
   })
   return { orch, calls, store }
 }
@@ -32,32 +37,32 @@ test('parseRoute：四种判定 + 非法', () => {
   assert.equal(parseRoute('x'), null)
 })
 
-test('lastAssistantText：取最后一条 assistant 文本', () => {
+test('lastAssistantText：取最后一条 assistant 文本（兼容旧调用）', () => {
   assert.equal(lastAssistantText([assistant('第一'), assistant('第二')]), '第二')
   assert.equal(lastAssistantText([{ event: { type: 'user/message' } }]), '')
 })
 
 test('rules 模式：不调模型，直接 accept + workerPreset', async () => {
   const { orch, calls } = harness({ config: { orchestrator: 'rules' } })
-  const out = await orch.route(ticket, { sessionId: 'intake-x', agent: {} })
+  const out = await orch.route(ticket)
   assert.equal(out.verdict, 'accept')
   assert.equal(out.mode, 'rules')
-  assert.equal(calls.prompt, 0)
+  assert.equal(calls.call, 0)
   assert.ok(out.preset)
 })
 
-test('agent 模式：解析会话判定', async () => {
-  const { orch, calls } = harness({ records: [assistant('{"verdict":"attach","ticketId":"github:issue-0","reason":"指向旧工单"}')] })
-  const out = await orch.route(ticket, { sessionId: 'intake-x', agent: {} })
+test('agent 模式：一次模型调用，解析判定（不碰会话）', async () => {
+  const { orch, calls } = harness({ text: '{"verdict":"attach","ticketId":"github:issue-0","reason":"指向旧工单"}' })
+  const out = await orch.route(ticket)
   assert.equal(out.verdict, 'attach')
   assert.equal(out.ticketId, 'github:issue-0')
   assert.equal(out.mode, 'agent')
-  assert.equal(calls.prompt, 1)
+  assert.equal(calls.call, 1)
 })
 
 test('agent 模式：不可解析 → 回退 rules 并记 lastError', async () => {
-  const { orch, store } = harness({ records: [assistant('我看一下')] })
-  const out = await orch.route(ticket, { sessionId: 'intake-x', agent: {} })
+  const { orch, store } = harness({ text: '我看一下' })
+  const out = await orch.route(ticket)
   assert.equal(out.verdict, 'accept')
   assert.equal(out.mode, 'rules')
   assert.equal(out.reason, 'fallback')
@@ -65,16 +70,16 @@ test('agent 模式：不可解析 → 回退 rules 并记 lastError', async () =
   assert.equal(orch.stats().fallbacks, 1)
 })
 
-test('agent 模式：prompt 抛错 → 回退 rules，不炸', async () => {
-  const { orch } = harness({ promptThrows: true })
-  const out = await orch.route(ticket, { sessionId: 'intake-x', agent: {} })
+test('agent 模式：模型调用抛错 → 回退 rules，不炸', async () => {
+  const { orch } = harness({ callThrows: true })
+  const out = await orch.route(ticket)
   assert.equal(out.verdict, 'accept')
   assert.equal(out.mode, 'rules')
 })
 
-test('没有目标会话 → 直接 rules', async () => {
-  const { orch, calls } = harness()
-  const out = await orch.route(ticket, null)
+test('没有 llm 服务 → 回退 rules 并记 lastError', async () => {
+  const { orch, store } = harness({ modelCall: false })
+  const out = await orch.route(ticket)
   assert.equal(out.mode, 'rules')
-  assert.equal(calls.prompt, 0)
+  assert.match(store.state.lastError, /llm/)
 })

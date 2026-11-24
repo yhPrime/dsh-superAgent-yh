@@ -1,8 +1,8 @@
 # 子计划书 · 单会话（会话内智能体团队）+ UI
 
-> 版本：v2.9（**未定稿**）｜状态：**未定稿（等用户授权；v2.9 修订未经批准不得动代码）**｜上次定稿：v2.8（2026-11-24）｜权威范围：单会话模式的「表现形式与执行形态」+ 控制台 UI。不改源协议、不改主线 relay。
+> 版本：v2.9（**定稿**）｜状态：**定稿（2026-11-24 用户选定 D28 选项 2）**｜上次定稿：v2.8（2026-11-24）｜权威范围：单会话模式的「表现形式与执行形态」+ 控制台 UI。不改源协议、不改主线 relay。
 >
-> **v2.9 修订（未定稿，2026-11-24 用户指示）**：用户要求「单会话应该默认使用极简模式这样 token 消耗最小，超级智能体插件只给单会话拼接必要的上下文」。这与 v2.8/D27「单会话切成重调度者 preset」方向相反——D27 每轮都要付 persona + 全套工具 schema 的钱，且每张工单还把路由 prompt 灌进用户会话。本版改为：单会话默认跑宿主内置 **`minimal`（极简模式）**；插件只往单会话写必要的东西（用户的话、relay 三条短消息、路由一问一答）；worker 子智能体用宿主 `startActivation` 的 `agentPreset` 字段**显式指定** `dsh-superagent-yh-worker`，不再靠继承父 preset。
+> **v2.9 修订（2026-11-24 定稿）**：用户要求「单会话应该默认使用极简模式这样 token 消耗最小，超级智能体插件只给单会话拼接必要的上下文」。这与 v2.8/D27「单会话切成重调度者 preset」方向相反——D27 每轮都要付 persona + 全套工具 schema 的钱，且每张工单还把路由 prompt 灌进用户会话。本版改为：单会话默认跑宿主内置 **`minimal`（极简模式）**；插件只往单会话写必要的东西（用户的话、relay 三条短消息）；路由由插件用 `ctx.llm` 一次性调用判定（**D28 已选选项 2**），单会话历史里连路由问答都不留。worker 子智能体用宿主 `startActivation` 的 `agentPreset` 字段**显式指定** `dsh-superagent-yh-worker`，不再靠继承父 preset。
 >
 > **v2.8 修订（2026-11-24 用户选 A）**：单会话登记时**切换到一个调度者 preset**（`dsh-superagent-yh-orchestrator`），让它在直接对话里也像智能体团队一样把任务派给子智能体，而不是自己干。另开一份占位计划 `子计划书-单会话UI修改.md`（状态：待做计划）。
 >
@@ -210,7 +210,7 @@
 - **极简模式自带的能力正合用**：图片读取、自动历史压缩、空闲 `/compact`；维护器注册时要的 `compaction` 服务因此仍在（须探针实测，见 R39）。
 - **单会话历史里只该有三种东西**：用户自己的话；relay 的开工/需人/完成三条短消息（每工单 ≤1K token 目标）；路由判定的一问一答。插件的 persona、工具 schema、长 mandate 都不再进单会话——它们随 preset 消失或只存在于 worker 会话内。
 - **直接对话不再"派活"**：极简模式的单会话就是普通对话（自己答或说做不了）。派活只发生在外部工单进管线时，由 executor 直接 spawn worker 子智能体，不经单会话模型二次决策。若以后想要"对话里也能派活"，那是显式打开重 preset 的可选项，不进默认行为。
-- **路由通道二选一（§7 D28 待拍板）**：选项 1 保留 `ctx.sessionController.prompt` 投 routePrompt（改动最小，代价是每张工单在用户会话留一问一答）；选项 2 改走 `ctx.llm` 一次性调用、复用 `lib/assessment.js` 的严格 JSON + 超时 + 回退 plumbing（单会话只留 relay 短消息，最省上下文，多改一处代码）。
+- **路由通道（D28 已拍板：选项 2）**：走 `ctx.llm` 一次性调用，复用 `lib/assessment.js` 的严格 JSON + 超时 + 回退 plumbing；不再用 `ctx.sessionController.prompt` 投 routePrompt。单会话历史只留 relay 短消息，路由问答不进用户会话。失败（超时/格式错/无 llm）回退 `rules` 并记 `lastError`，不静默。
 
 ## 3 里程碑
 
@@ -221,6 +221,7 @@
 | T2 | `/status?sessionId=` 过滤 + tickets.mode | 路由实测 | 0.25 天 |
 | T3 | TeamTaskBoard UI + 注册 slot | 客户端 smoke + 页面走查 | 0.5 天 |
 | T4 | 集成验收：一条工单 → 会话内出现成员与任务 → 完成 → 任务板变绿、侧栏不新增会话 | 真实跑通 | 0.5 天 |
+| T5 | **v2.9 落地**：`singleSession.preset='minimal'` + 删重 preset + worker 显式 `agentPreset` + orchestrator 走 `ctx.llm` + relay 投 `targetSessionId` | E12.17–E12.19 全绿，四路测试通过 | 0.5 天 |
 
 约 1.75 天。
 
@@ -286,6 +287,6 @@
 - **D25**（2026-11-24 用户指示）：单会话做成**胶囊式开关**；开启时每个工作区的接单会话 `pinSession` **顶置**，关闭时 `unpinSession` 恢复。
 - **D26**（2026-11-24 用户定，v2.7 取代 D25 的自动建/自动 pin）：单会话改为**手动新建会话 + 权限右侧胶囊「超级智能体」登记**；登记后唯一、禁止入档删除、只能从控制台解除；控制台只列已登记的工作区（§2.12）。
 - **D27**（2026-11-24 用户选 A，**已被 D28 取代**）：登记时切换到**调度者 preset**，让单会话在直接对话里也把任务派给子智能体；解除时切回原 preset（§2.13）。单会话 UI 的后续修改另立占位计划 `子计划书-单会话UI修改.md`（待做计划）。
-- **D28**（2026-11-24 用户指示，v2.9 待授权）：单会话**默认跑宿主极简模式**（`singleSession.preset='minimal'`），不再切重调度者 preset；删 `dsh-superagent-yh-orchestrator-preset` 与 `config.orchestratorPreset`；worker 由 `startActivation({agentPreset: config.workerPreset})` 显式指定；插件只向单会话拼接必要上下文（用户的话 + relay 三条短消息 + 路由一问一答）。**待用户二选一**：路由走会话内 prompt（选项 1，改动最小）还是 `ctx.llm` 一次性调用（选项 2，最省上下文、多改一处）；未选前不实施。
+- **D28**（2026-11-24 用户拍板，v2.9 定稿）：单会话**默认跑宿主极简模式**（`singleSession.preset='minimal'`），不再切重调度者 preset；删 `dsh-superagent-yh-orchestrator-preset` 与 `config.orchestratorPreset`；worker 由 `startActivation({agentPreset: config.workerPreset})` 显式指定；插件只向单会话拼接必要上下文（用户的话 + relay 三条短消息）。**路由已选选项 2**：`ctx.llm` 一次性调用判定，单会话内不留路由问答；超时/格式错回退 `rules` 并记 `lastError`。
 - 已确认口径（2026-11-24）：**很像智能体团队，但不是完全一样**——借鉴表现形式，不复制其开关/组件/任务语义（§1.1）。
 - **2026-11-24 用户拍板 D14–D23，本文件定稿（v2.5）**，按 T1→T4 执行；四路测试按迭代规则跑完再收口。

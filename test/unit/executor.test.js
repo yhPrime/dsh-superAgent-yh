@@ -84,6 +84,7 @@ test('单会话：走子智能体，完工 dispose+archive，工单 done', async
   assert.equal(h.store.state.tickets[h.ticket.id].status, 'done')
   assert.equal(h.store.state.tickets[h.ticket.id].mode, 'team')
   assert.equal(h.calls.spec.provider, 'spawn')
+  assert.equal(h.calls.spec.agentPreset, h.config.workerPreset)
   assert.ok(h.calls.spec.cwd)
 })
 

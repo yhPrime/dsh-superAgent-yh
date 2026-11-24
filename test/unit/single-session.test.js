@@ -28,10 +28,10 @@ test('regionEndOf：保留最近 N 轮', () => {
   assert.equal(regionEndOf(records, 4), null)
 })
 
-function harness({ enabled = true, sessions = [{ sessionId: 's1', workspaceId: 'w1', cwd: 'C:/repo' }], workspaces = [{ id: 'w1', path: 'C:/repo', title: 'repo' }], state = { running: false, queue: [], pendingInput: [], cursor: 7 }, pressure = { pressureTokens: 100, contextWindow: 1000 }, blank = true, selectError = null } = {}) {
+function harness({ enabled = true, sessions = [{ sessionId: 's1', workspaceId: 'w1', cwd: 'C:/repo' }], workspaces = [{ id: 'w1', path: 'C:/repo', title: 'repo' }], state = { running: false, queue: [], pendingInput: [], cursor: 7 }, pressure = { pressureTokens: 100, contextWindow: 1000 }, blank = true, selectError = null, config: configPatch = {} } = {}) {
   const calls = { pin: 0, unpin: 0, archive: 0, compact: 0, selected: [] }
   const store = { state: { singleSessions: {}, singleSession: {}, lastError: null }, save() {} }
-  const config = normalizeConfig({ singleSession: { enabled, idleMinutes: 30, pressureRatio: 0.5 } })
+  const config = normalizeConfig({ ...configPatch, singleSession: { enabled, idleMinutes: 30, pressureRatio: 0.5, ...(configPatch.singleSession ?? {}) } })
   const agent = { session: {} }
   const maintainer = createSingleSessionMaintainer({
     ctx: {}, config, store, log: () => {}, redact: (x) => x,
@@ -100,15 +100,21 @@ test('unregister：撤销登记 + unpin；removeSingle：先注销再归档', as
   assert.equal(h.calls.archive, 1)
 })
 
-test('register：切到调度者 preset 并记住原 preset；解除时切回', async () => {
+test('register：切到极简 preset（默认 minimal）并记住原 preset；解除时切回', async () => {
   const h = harness()
   await h.maintainer.register('s1')
-  assert.deepEqual(h.calls.selected, ['dsh-superagent-yh-orchestrator'])
+  assert.deepEqual(h.calls.selected, ['minimal'])
   assert.equal(h.store.state.singleSessionPrevPreset.w1, 'standard')
 
   await h.maintainer.unregister('s1')
-  assert.deepEqual(h.calls.selected, ['dsh-superagent-yh-orchestrator', 'standard'])
+  assert.deepEqual(h.calls.selected, ['minimal', 'standard'])
   assert.equal(h.store.state.singleSessionPrevPreset.w1, undefined)
+})
+
+test('register：singleSession.preset 可覆盖默认 minimal', async () => {
+  const h = harness({ config: { singleSession: { enabled: true, preset: 'ptc' } } })
+  await h.maintainer.register('s1')
+  assert.deepEqual(h.calls.selected, ['ptc'])
 })
 
 test('register：已开始的会话拒绝登记（宿主不允许中途切 preset）', async () => {

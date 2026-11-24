@@ -19,7 +19,7 @@ window.__ModuleLoader__.load({
         source: '源', status: '状态', attempts: '尝试', lastError: '最后错误', actions: '操作',
         retry: '重试', cancel: '取消', session: '会话', log: '日志', closeLog: '收起日志',
         settings: '设置', basic: '基础', dryRun: 'dryRun（只记录不干活）', mainSession: '主线会话 ID',
-        poll: '轮询间隔(ms)', preset: 'worker preset', save: '保存', saving: '保存中…', saved: '已保存（插件会重载）',
+        poll: '轮询间隔(ms)', preset: 'worker preset', repoPath: '本地 git 仓库路径（worker worktree 源）', save: '保存', saving: '保存中…', saved: '已保存（插件会重载）',
         github: 'GitHub', feishu: '飞书', qq: 'QQ', enabled: '启用', repo: '仓库 owner/name',
         labels: '触发标签（逗号分隔）', authors: '作者白名单（逗号分隔）', token: 'Token（留空保持）',
         tokenSet: '已配置，留空保持不变', tokenUnset: '未配置', apiBase: 'API 地址', confirmWrites: '允许回写',
@@ -38,7 +38,7 @@ window.__ModuleLoader__.load({
         source: 'Source', status: 'Status', attempts: 'Attempts', lastError: 'Last error', actions: 'Actions',
         retry: 'Retry', cancel: 'Cancel', session: 'Session', log: 'Log', closeLog: 'Hide log',
         settings: 'Settings', basic: 'Basics', dryRun: 'dryRun (record only)', mainSession: 'Main session id',
-        poll: 'Poll interval (ms)', preset: 'worker preset', save: 'Save', saving: 'Saving…', saved: 'Saved (plugin reloads)',
+        poll: 'Poll interval (ms)', preset: 'worker preset', repoPath: 'Local git repo path (worktree source)', save: 'Save', saving: 'Saving…', saved: 'Saved (plugin reloads)',
         github: 'GitHub', feishu: 'Feishu', qq: 'QQ', enabled: 'Enabled', repo: 'Repository owner/name',
         labels: 'Trigger labels (comma separated)', authors: 'Author allowlist (comma separated)', token: 'Token (blank keeps current)',
         tokenSet: 'Configured; blank keeps it', tokenUnset: 'Not set', apiBase: 'API base', confirmWrites: 'Allow write-back',
@@ -99,6 +99,7 @@ window.__ModuleLoader__.load({
       return {
         dryRun: config.dryRun,
         mainSessionId: config.mainSessionId || '',
+        repoPath: config.repoPath || '',
         pollIntervalMs: String(config.pollIntervalMs),
         workerPreset: config.workerPreset || '',
         github: { enabled: g.enabled, repo: g.repo || '', labels: (g.labels || []).join(', '), authors: (g.authors || []).join(', '), apiBase: g.apiBase || '', confirmWrites: g.confirmWrites, token: '', hasToken: g.hasToken },
@@ -115,6 +116,7 @@ window.__ModuleLoader__.load({
       return {
         dryRun: form.dryRun,
         mainSessionId: form.mainSessionId,
+        repoPath: form.repoPath,
         pollIntervalMs: Number(form.pollIntervalMs) || 60000,
         workerPreset: form.workerPreset,
         sources: {
@@ -327,6 +329,7 @@ window.__ModuleLoader__.load({
         h('div', { className: 'syh-row' },
           h(Check, { label: t('dryRun'), checked: form.dryRun, onChange: (v) => setField('dryRun', v) }),
           h(Field, { label: t('mainSession') }, h(TextInput, { value: form.mainSessionId, onChange: (v) => setField('mainSessionId', v) })),
+          h(Field, { label: t('repoPath') }, h(TextInput, { value: form.repoPath, onChange: (v) => setField('repoPath', v) })),
           h(Field, { label: t('poll') }, h(TextInput, { type: 'number', value: form.pollIntervalMs, onChange: (v) => setField('pollIntervalMs', v) })),
           h(Field, { label: t('preset') }, h(TextInput, { value: form.workerPreset, onChange: (v) => setField('workerPreset', v) })),
         ),

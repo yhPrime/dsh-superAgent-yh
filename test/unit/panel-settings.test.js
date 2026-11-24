@@ -56,6 +56,11 @@ test('mergeSettings：QQ 两模式嵌套字段合并', () => {
   assert.equal(next.sources.qq.official.token, 't')
 })
 
+test('mergeSettings：repoPath 可写（真跑 worktree 源）', () => {
+  const next = mergeSettings(base(), { repoPath: 'C:/work/repo' })
+  assert.equal(next.repoPath, 'C:/work/repo')
+})
+
 test('mergeSettings 后仍走配置校验（启用 GitHub 但缺 repo 会抛）', () => {
   const next = mergeSettings(base(), { sources: { github: { enabled: true } } })
   assert.throws(() => normalizeConfig(next), ConfigError)

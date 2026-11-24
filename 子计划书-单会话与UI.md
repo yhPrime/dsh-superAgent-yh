@@ -1,170 +1,129 @@
-# 子计划书 · 单会话模式 + 控制台升级
+# 子计划书 · 单会话（会话内智能体团队）+ UI
 
-> 版本：v1.1（定稿）｜状态：**定稿（2026-11-24 拍板 D13）**｜定稿日期：2026-11-24｜权威范围：①「单会话模式」（每个工作空间一个接单会话 + 旧上下文自动压缩）②控制台 UI 升级。不改源协议、不改 worker 执行器、不改主线 relay。
+> 版本：v2.0（**未定稿**，待拍板）｜状态：**未定稿**｜定稿日期：—（v1.1 曾是定稿）｜权威范围：单会话模式的「表现形式与执行形态」+ 控制台 UI。不改源协议、不改主线 relay。
 >
-> v1.1 实施口径澄清：§3.3 独立网页是**服务端渲染**（宿主没有 React/SSR），无法与应用内 React 组件共享渲染代码；因此改为**共享同一份 `/status` 数据与同一套主题 token/样式变量**，不复用组件。用户可见范围不变。
->
-> 依据：用户 2026-11-24 需求「控制台太简陋」+「每个工作空间理应只有一个会话，跟它说的话只有短期上下文，过时间就超级压缩或删除，避免上下文堆积的额外开销，控制台要有开关」。
-> 已核实宿主能力（`cordis_inspect`）：`compaction.compactNow / compactIfNeeded / compactRegion`、`tokenMeter.contextPressure(session)`、`sessionController.state/list`、`workspaceRegistry.list/resolveByPath`、`agents.get`。**压缩复用宿主自己的 compaction 服务，不自写摘要逻辑。**
+> **为什么改回未定稿**：用户 2026-11-24 指出「单会话的表现不应该是这样，应该和智能体团队的表现形式相似」。v1.1 只做了「一个接单会话 + 上下文压缩」，但工单仍由**顶层 `worker-*` 会话**执行——它们会作为独立会话出现在侧栏里，完全不像智能体团队。v2.0 把执行改成**会话内子智能体**，并像 Agent Teams 一样在会话头渲染**任务板 + 成员**。
 
 ## 0 一句话
 
-给插件加一个**单会话模式**开关：每个工作空间只留一个「你说话的接单会话」，空闲或上下文涨到阈值就自动把旧上下文压成摘要；同时把控制台从「一条长列表」升级成分页签的完整控制台。
+单会话 = **一个会话里的一支团队**：你只跟一个会话说话；每来一个工单，它作为这个会话的**子智能体**（subagent）去干，任务板显示在会话头（和 Agent Teams 同一个位置），干完结果回到这个会话。
 
-## 1 拍板记录
+## 1 现在为什么不"像团队"
 
-- **D13（2026-11-24）**：「一个会话」**只收敛接单会话**（你说话的那个）。**worker 仍每工单独立会话 + 独立 worktree**，隔离与可回滚不变。
-- 因此本计划**不动** `lib/executor.js` 的 worker 流程，只新增「接单会话维护器」。
+| | v1.1 现状 | v2.0 目标（像 Agent Teams） |
+|---|---|---|
+| 执行体 | `sessionController.create('worker-<id>')` 顶层会话 | `subagents.startActivation({provider:'spawn', parent: 接单会话})` 子智能体 |
+| 侧栏 | 每个工单多一条 `worker-*` 会话 | 侧栏**只有**那一个接单会话 |
+| 会话内 | 看不到任何工单痕迹 | 会话头出现**任务板**（pending/in_progress/completed）与**成员列表** |
+| 上下文 | worker 自己的会话上下文 | 子智能体各自上下文；父会话只留调用/结果（短） |
+| 观察 | 要点进另一个会话 | 就在当前会话里看进度、点开任务 |
 
-## 2 单会话模式
+## 2 方案
 
-### 2.1 配置
+### 2.1 触发条件
 
-```yaml
-singleSession:
-  enabled: false          # 总开关（控制台设置页也有同一个开关）
-  idleMinutes: 30         # 空闲多久后压缩
-  pressureRatio: 0.5      # 上下文占用 / 窗口 超过此比例也压缩（不在跑时才压）
-  aggressive: false       # true=用 compactRegion 把除最近若干轮外全部压成摘要（"超级压缩"）
-  keepRecentTurns: 2      # aggressive 时保留最近几轮
-  autoCreate: true        # 工作空间没有接单会话时自动建一个
-  sessionIdPrefix: intake # 自动建会话的 id 前缀：intake-<工作空间slug>
-```
+- `singleSession.enabled: true` → 工单走**会话内团队**路径（本计划）
+- `singleSession.enabled: false` → 保持现有 `worker-*` 顶层会话路径（不动，向后兼容）
 
-校验：`idleMinutes ≥ 1`；`0 < pressureRatio ≤ 1`；`keepRecentTurns ≥ 0`；非法即 `ConfigError`（fail-closed，与其它配置同口径）。
+不新增第二个开关，避免「单会话开着却还是顶层会话」的混乱。
 
-### 2.2 接单会话怎么定
-
-按工作空间（`workspaceRegistry.list()` 的每个 `path`）：
-
-1. 若 `sources.session.enabled` 且其 `sessionId` 的 cwd 属于该工作空间 → **就用它**（不另建）；
-2. 否则找 id 为 `intake-<slug>` 的会话（`sessionController.list()` 里按 cwd + id 匹配）；
-3. 找不到且 `autoCreate: true` → `sessionController.create({ sessionId: 'intake-<slug>', cwd: <工作空间路径> })`；
-4. `autoCreate: false` 且找不到 → 该工作空间标记「无接单会话」，面板提示，不报错不建。
-
-`slug` = 工作空间路径去掉盘符与非法字符后的短哈希（保证同一目录稳定、不同目录不撞）。
-
-### 2.3 压缩维护器（新文件 `lib/single-session.js`）
-
-一个定时器（默认 60s，跟随 `pollIntervalMs`），对每个接单会话：
+### 2.2 执行（替换 `lib/executor.js` 的会话创建段）
 
 ```
-state = sessionController.state({sessionId})
-若 state.running || queue 非空 || pendingInput 非空 → 跳过（绝不压正在跑的）
-pressure = tokenMeter.contextPressure(agent.session)   // {pressureTokens, contextWindow}
-idleFor = now - lastActivityAt                          // lastActivity 由 state.cursor 变化时记录
-需要压缩 = (idleFor ≥ idleMinutes) || (pressureTokens / contextWindow ≥ pressureRatio)
-若需要：
-  aggressive ? compaction.compactRegion(起点, 终点, agent, signal)
-             : compaction.compactNow(agent, signal)
-  记录 { at, beforeTokens, afterTokens, mode } 到 state.singleSession[sessionId]
+工单 queued
+→ 确保该工单的 worktree（保留：每个工单一个独立目录，可回滚）
+→ 取该工作空间接单会话的 live agent（agents.get / resolveAgent）
+→ subagents.startActivation({
+     provider: 'spawn',
+     parent: agent,
+     name: 'ticket-<短id>',
+     label: <工单标题>,
+     cwd: <worktree>,
+     prompt: [mandate 文本],
+     delivery: 'parent',
+     signal,
+   })
+→ await activation.result
+→ 解析结果（结构化输出或 ticket_report）
+→ done/waiting/failed + 回写来源 + 面板
 ```
 
-- `lastActivityAt`：维护器自己记（`state.cursor` 变了就刷新），重启后从 `sessionController.list()` 的 `updatedAt` 恢复。
-- 压缩失败 → 记 `lastError`，面板可见，**不重试风暴**（下一轮再试）。
-- 开关关闭 → 定时器停，不碰任何会话。
+- **不再** `sessionController.create('worker-*')`，侧栏不再多会话。
+- 子智能体同样受 `maxWorkers: 1` 串行约束（一次一个 activation）。
+- 取消：`activation.dispose()`；超时同样先 dispose 再标 failed。
+- 深度：父会话是普通会话，子智能体深度 1；子智能体自己再派子代理由宿主 depth 限制兜底。
 
-### 2.4 关于「删除」
+### 2.3 回报
 
-宿主**没有**公开的「清空/截断会话历史」接口；官方机制就是 compaction（把旧区间换成摘要）。所以：
+- 优先：给子智能体注册 `ticket_report`（在 `agent/created` 事件里按 childId 命中后注册到 child.ctx，结束即撤）。
+- 兜底：mandate 要求最后一行 `[[ticket:done]] 摘要` / `[[ticket:waiting]] 问题` / `[[ticket:failed]] 原因`，主进程解析 `activation.result` 的最终文本。
+- 两种都拿不到 → failed（原因写明），不静默。
 
-- **默认用压缩**（`compactNow`），`aggressive: true` 时用 `compactRegion` 做「超级压缩」——效果上旧上下文只剩一段摘要，等价于用户要的「压缩或删除」。
-- **不做**「归档旧会话 + 新建」式硬删除：那会产生新 sessionId，与「只有一个会话」矛盾，且丢历史。若以后确实要，另开子计划拍板。
+### 2.4 任务板 UI（像 Agent Teams）
 
-### 2.5 面板要显示的
+- 注册到 `conversation.session.header.actions.subagent.footer`（Agent Teams 的 `TeamBoard` 用的同一个 slot），只在**当前会话有该工作空间的工单**时显示。
+- 数据：`GET /status?sessionId=<当前会话>` 返回该工作空间（按 session 的 cwd 匹配）的工单；client 在 slot 里按 5s 轮询。
+- 行：状态点（pending/in_progress/completed/失败）＋工单标题＋来源；展开显示工单 id/错误/摘要；点「打开」跳到控制台工单页。
+- 尺寸与样式跟随宿主（`--dsw-alias-*`），不引 UI 库；与 TeamBoard 视觉对齐但不复用其组件（避免依赖别的插件内部）。
 
-每个工作空间一张卡：
+### 2.5 控制台（保留并调整）
 
-- 工作空间路径 + 接单会话 id（可点「打开会话」）
-- **上下文占用进度条**：`pressureTokens / contextWindow`，超阈值变色
-- 上次压缩时间 + 压缩前后 token 数
-- 状态：运行中 / 空闲 xx 分钟 / 无接单会话
-- 按钮：**立即压缩**、**打开会话**
-- 设置页：单会话开关 + idleMinutes + pressureRatio + aggressive + keepRecentTurns + autoCreate
+- 概览：工作空间卡保留；「工单」页签保留（全局视角）。
+- 工单表「会话」按钮改为「在会话里看」→ 用 `uiWorkspace.openSession(接单会话 id)`。
+- 单会话设置不变。
 
-## 3 控制台 UI 升级
-
-### 3.1 结构（左栏主面板）
-
-顶部工具条（标题 + 版本 + 运行状态灯 + 刷新 + 关闭）＋四个页签：
-
-| 页签 | 内容 |
-|---|---|
-| **概览** | 三态统计卡（可点击跳工单页并过滤）；工作空间/接单会话卡（含上下文进度条、立即压缩）；源健康列表（ok/错误/水位/最近新增）；最近活动流（最近 10 条状态变化） |
-| **工单** | 状态过滤 chips + 搜索框；表格加「来源」「形态」列；行内操作（重试/取消/会话/日志）；日志抽屉；空状态引导 |
-| **源** | 每源一张卡（GitHub / 飞书 / QQ / 会话），卡头启用开关，字段分组，token 用「已配置」徽章 + 展开修改；底部 sticky 保存 |
-| **设置** | 基础（dryRun / 主线会话 / repoPath / 轮询 / preset）＋**单会话模式**（开关与参数）＋提示区 |
-
-右栏紧凑版：只保留「概览 + 工单」两页签，其余引导到左栏完整控制台。
-
-### 3.2 视觉与交互
-
-- 全部用宿主主题 token（`--dsw-alias-*`），暗色自动跟随；不引入任何 UI 库、不新增依赖。
-- 统一圆角/间距/字号层级；状态色语义化（queued 警告色、running 品牌色、done 成功色、failed 错误色）。
-- 加载骨架、可关闭错误横幅、按钮 hover/focus 可见、表格行 hover、空状态有下一步引导。
-- 表单：分组 + 说明文字 + 校验错误就地提示；保存中禁用按钮并显示结果。
-- 不写 DOM 到组件外、不读别的插件 DOM（遵循宿主 UI 规范）。
-
-### 3.3 独立网页
-
-`/dsh-superagent-yh` 保留为只读兜底，同步升级样式（同一套主题 token/样式变量）并展示单会话摘要；数据复用同一个 `/status`。实施口径：服务端渲染，不共享 React 组件（v1.1 澄清）。
-
-## 4 接口改动
-
-| 路由 | 改动 |
-|---|---|
-| `GET /status` | 增加 `singleSession`（配置 + 每会话运行态）、`workspaces[]`（路径/会话/pressure/contextWindow/lastCompact/running/idleMinutes） |
-| `POST /action` | 新增 `action: 'compact'`（带 `sessionId`，Origin 校验；正在跑则 409） |
-| `POST /settings` | 白名单加 `singleSession.*`；仍走 `normalizeConfig` 校验 |
-
-## 5 代码改动清单
+### 2.6 代码改动
 
 | 文件 | 改动 |
 |---|---|
-| `lib/config.js` | `singleSession` 默认值 + 校验 |
-| `lib/single-session.js`（新） | 接单会话解析、维护定时器、压缩触发、运行态快照 |
-| `lib/index.js` | 装配维护器；`superagent_status` 增加单会话信息 |
-| `lib/panel.js` | `/status` 扩展、`/action` 加 compact、`/settings` 白名单、独立页升级 |
-| `client.js` | 四页签重构 + 工作空间卡 + 单会话设置 + 视觉升级 |
-| `test/unit/single-session.test.js`（新） | 触发判定（空闲/压力/正在跑不压）、会话解析、配置校验 |
-| `test/unit/panel-settings.test.js` | 补 singleSession 合并与脱敏 |
+| `lib/executor.js` | 新增 team 路径：subagents.startActivation + result 解析；原 worker 路径保留为 `singleSession.enabled=false` 分支 |
+| `lib/single-session.js` | 暴露「取该工作空间接单会话的 live agent」给 executor（resolve agent + ensure 会话） |
+| `lib/panel.js` | `/status` 支持 `?sessionId=` 过滤该工作空间工单；tickets 增加 `mode: 'team'|'worker'` |
+| `client.js` | 新增 TeamTaskBoard 组件 + 注册 `conversation.session.header.actions.subagent.footer`；工单「会话」按钮跳转调整 |
+| `test/unit/executor-team.test.js`（新） | 激活参数、串行、dispose、结果解析（工具/文本/无回报） |
+| `test/unit/single-session.test.js` | 补「取 live agent」路径 |
 
-## 6 里程碑
+## 3 里程碑
 
 | 阶段 | 内容 | 退出条件 | 估时 |
 |---|---|---|---|
-| U1 | 配置 + 维护器（解析/触发/压缩/快照） | 单测：空闲触发、压力触发、运行中不压、开关关闭不动 | 0.5 天 |
-| U2 | host 接口（status/workspaces、compact、settings） | 路由实测：200/409/400 | 0.5 天 |
-| U3 | 控制台四页签 + 工作空间卡 + 单会话设置 | 客户端 smoke + 真实页面走查 | 1 天 |
-| U4 | 独立页同步 + 集成验收 | 真实会话涨上下文 → 自动压缩 → token 下降可见 | 0.5 天 |
+| T1 | executor team 路径 + 结果解析 + 单测（stub subagents） | 单测覆盖激活/串行/dispose/解析 | 0.5 天 |
+| T2 | `/status?sessionId=` 过滤 + tickets.mode | 路由实测 | 0.25 天 |
+| T3 | TeamTaskBoard UI + 注册 slot | 客户端 smoke + 页面走查 | 0.5 天 |
+| T4 | 集成验收：一条工单 → 会话内出现成员与任务 → 完成 → 任务板变绿、侧栏不新增会话 | 真实跑通 | 0.5 天 |
 
-约 2.5–3 天。
+约 1.75 天。
 
-## 7 验收（E11）
+## 4 验收（E12）
 
 | 编号 | 判据 |
 |---|---|
-| E11.1 | 开关默认关；关闭时不创建、不压缩任何会话（现有行为零变化） |
-| E11.2 | 开启后每个工作空间有且仅有一个接单会话（已配置 session 源则复用，不重复建） |
-| E11.3 | 空闲超 `idleMinutes` 或占用超 `pressureRatio` → 自动压缩，面板显示前后 token 下降 |
-| E11.4 | **正在跑/排队/等人输入时绝不压缩** |
-| E11.5 | 「立即压缩」按钮可用；正在跑时返回 409 且原因可见 |
-| E11.6 | `aggressive: true` 时旧上下文只剩摘要（保留最近 N 轮） |
-| E11.7 | 控制台四页签可用，暗色跟随，无 console 报错；右栏紧凑版正常 |
-| E11.8 | worker 每工单独立会话 + worktree **不变**；现有单测全绿 |
+| E12.1 | 单会话开启：工单执行**不**产生新的顶层会话（侧栏无 `worker-*`） |
+| E12.2 | 工单执行时当前会话头出现任务板（pending→in_progress→completed）与成员 |
+| E12.3 | 子智能体在独立 worktree 里干活，父会话上下文只增加调用/结果（短） |
+| E12.4 | 完成/需要人/失败能落到任务板与工单状态；来源回写照旧 |
+| E12.5 | 取消/超时能 dispose 子智能体，不残留运行中的成员 |
+| E12.6 | 单会话关闭：现有 `worker-*` 路径行为不变（回归） |
+| E12.7 | 现有 83 条单测全绿；新增 T1 单测全绿 |
 
-## 8 风险
+## 5 风险
 
 | 编号 | 风险 | 处置 |
 |---|---|---|
-| R25 | 压缩本身要花一次模型调用 | 只在空闲/超阈值时压；面板显示压缩次数与前后 token，让用户看得见收益 |
-| R26 | 压掉用户还想回看的内容 | 摘要保留在会话里（不是删除）；`keepRecentTurns` 可调；面板提示 |
-| R27 | 误压正在进行的对话 | 三重判定（running/queue/pendingInput）+ compact 前再查一次 state |
-| R28 | 自动建会话打扰用户 | `autoCreate` 可关；默认只在开启单会话模式后才建 |
-| R29 | 多工作空间时定时器开销 | 单定时器遍历，跳过运行中；无接单会话的工作空间直接跳过 |
+| R30 | `subagents.startActivation` 是宿主内部服务，跨版本可能变 | 版本锁 `<0.3`；失败明确报错，不静默降级 |
+| R31 | 子智能体结果解析不稳（模型不按格式） | 工具优先 + 文本兜底；都拿不到标 failed 并保留原文 |
+| R32 | 父会话上下文仍会被调用记录撑大 | 继续用 U1 的压缩维护器；子智能体上下文独立 |
+| R33 | 任务板 slot 与 Agent Teams 争同一位置 | 双方都在 `footer` list 里，按 order 排；我们只在有工单时渲染 |
+| R34 | worktree 仍每工单一个，磁盘会涨 | 保留现状（可回滚优先）；后续可加清理策略，不在本期 |
 
-## 9 不做
+## 6 与已实现部分的关系
 
-- 不做硬删除历史（见 §2.4）。
-- 不把 worker 合并进接单会话（D13 已定）。
-- 不引入 UI 组件库、不做动画特效、不改宿主 preset 选择器。
+- **保留**：U1 压缩维护器、U2 `/status`/`settings`、U3 控制台四页签、独立页。
+- **替换**：executor 的 worker 会话创建段（改为 subagent 分支）。
+- **新增**：任务板 UI、`/status?sessionId=` 过滤、结果解析。
+
+## 7 待拍板
+
+- **D14**：单会话开启时，工单改为**会话内子智能体**执行（推荐）；关闭时保持顶层 worker 会话。
+- **D15**：任务板放在 `conversation.session.header.actions.subagent.footer`（与 Agent Teams 同位置，推荐）。
+- 拍板后本文件改回 v2.0 定稿，我再改代码。

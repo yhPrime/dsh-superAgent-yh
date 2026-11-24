@@ -41,7 +41,7 @@ test('pickWorkspace：清单外的 hint 若是路径则直接采用（仓库未�
 })
 
 test('pickSession：优先 intake id，其次同 cwd 的 intake- 会话', () => {
-  const wanted = intakeIdOf('intake', 'C:/repo-a')
+  const wanted = intakeIdOf('intake', 'C:/repo-a', 'w-a')
   assert.equal(pickSession(workspaces[0], [{ sessionId: wanted, cwd: 'C:/repo-a' }]).sessionId, wanted)
   assert.equal(pickSession(workspaces[0], [{ sessionId: 'intake-x-1', cwd: 'C:\\repo-a' }]).sessionId, 'intake-x-1')
   assert.equal(pickSession(workspaces[0], [{ sessionId: 'session-other', cwd: 'C:/repo-a' }]), null)
@@ -54,6 +54,8 @@ function harness({ sessions = [], workspaces: ws = workspaces, single = {}, crea
     deps: {
       listWorkspaces: () => ws,
       listSessions: async () => sessions,
+      resolveByPath: async (path) => (ws.find((w) => w.path === path) ?? null),
+      createWorkspace: async (path) => { created.push({ registered: path }); return { id: 'w-new', path } },
       createSession: async (request) => {
         if (createThrows) throw new Error('create failed')
         created.push(request)
@@ -75,13 +77,30 @@ test('resolve：找到已有单会话', async () => {
 test('resolve：没有则按 autoCreate 建；关掉则报错', async () => {
   const on = harness()
   const out = await on.resolver.resolve({ workspaceHint: 'C:/repo-a' }, null)
-  assert.equal(out.sessionId, intakeIdOf('intake', 'C:/repo-a'))
+  assert.equal(out.sessionId, intakeIdOf('intake', 'C:/repo-a', 'w-a'))
   assert.equal(on.created.length, 1)
 
   const off = harness({ single: { autoCreate: false } })
   const out2 = await off.resolver.resolve({ workspaceHint: 'C:/repo-a' }, null)
   assert.equal(out2.sessionId, null)
   assert.match(out2.error, /没有单会话/)
+})
+
+test('resolve：建单会话时用 workspaceId 绑定工作区（不是 cwd）', async () => {
+  const h = harness()
+  await h.resolver.resolve({ workspaceHint: 'C:/repo-a' }, null)
+  const request = h.created[0]
+  assert.equal(request.sessionId, intakeIdOf('intake', 'C:/repo-a', 'w-a'))
+  assert.equal(request.workspaceId, 'w-a')
+  assert.equal(request.cwd, undefined)
+})
+
+test('pickSession：优先返回属于该 workspace 的会话', () => {
+  const list = [
+    { sessionId: 'intake-old', cwd: 'C:/repo-a' },
+    { sessionId: 'intake-new', cwd: 'C:/repo-a', workspaceId: 'w-a' },
+  ]
+  assert.equal(pickSession(workspaces[0], list).sessionId, 'intake-new')
 })
 
 test('resolve：找不到工作区 / 建会话失败都返回明确错误', async () => {

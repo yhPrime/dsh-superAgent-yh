@@ -89,7 +89,7 @@ test('维护器：snapshot 是只读的，不会建会话', async () => {
 test('维护器：没有会话时按 autoCreate 建一个；关掉则不建', async () => {
   const on = harness()
   const snap = await on.maintainer.maintain()
-  assert.equal(snap.workspaces[0].sessionId, intakeIdOf('intake', 'C:/repo'))
+  assert.equal(snap.workspaces[0].sessionId, intakeIdOf('intake', 'C:/repo', 'w1'))
   assert.equal(on.calls.created.length, 1)
 
   const off = harness({ single: { autoCreate: false } })
@@ -100,7 +100,7 @@ test('维护器：没有会话时按 autoCreate 建一个；关掉则不建', as
 })
 
 test('维护器：已有接单会话则复用，不重复建', async () => {
-  const id = intakeIdOf('intake', 'C:/repo')
+  const id = intakeIdOf('intake', 'C:/repo', 'w1')
   const h = harness({ sessions: [{ sessionId: id, cwd: 'C:/repo', updatedAt: Date.now() }] })
   const snap = await h.maintainer.snapshot()
   assert.equal(snap.workspaces[0].sessionId, id)
@@ -116,7 +116,7 @@ test('维护器：不把同目录无关会话当接单会话（autoCreate=false 
 })
 
 test('维护器：空闲到点会压缩并记账；运行中不压', async () => {
-  const id = intakeIdOf('intake', 'C:/repo')
+  const id = intakeIdOf('intake', 'C:/repo', 'w1')
   const idle = harness({ single: { idleMinutes: 1 }, sessions: [{ sessionId: id, cwd: 'C:/repo', updatedAt: Date.now() - 120_000 }] })
   // 首轮把 lastActivity 记为现在，第二轮才可能判空闲；直接把 idleMinutes 设 0 不允许，故用压力路径验证触发
   const pressure = harness({ single: { pressureRatio: 0.1 }, sessions: [{ sessionId: id, cwd: 'C:/repo' }], pressure: { pressureTokens: 500, contextWindow: 1000 } })
@@ -133,7 +133,7 @@ test('维护器：空闲到点会压缩并记账；运行中不压', async () =>
 })
 
 test('维护器：aggressive 走 compactRegion', async () => {
-  const id = intakeIdOf('intake', 'C:/repo')
+  const id = intakeIdOf('intake', 'C:/repo', 'w1')
   const h = harness({ single: { pressureRatio: 0.1, aggressive: true, keepRecentTurns: 2 }, sessions: [{ sessionId: id, cwd: 'C:/repo' }], pressure: { pressureTokens: 900, contextWindow: 1000 } })
   await h.maintainer.maintain()
   assert.equal(h.calls.region, 1)
@@ -142,7 +142,7 @@ test('维护器：aggressive 走 compactRegion', async () => {
 })
 
 test('维护器：宿主说没什么可压（返回 null）时不记账', async () => {
-  const id = intakeIdOf('intake', 'C:/repo')
+  const id = intakeIdOf('intake', 'C:/repo', 'w1')
   const store = { state: { singleSession: {}, lastError: null }, save() {} }
   const config = normalizeConfig({ singleSession: { enabled: true, pressureRatio: 0.1 } })
   const m = createSingleSessionMaintainer({
@@ -162,7 +162,7 @@ test('维护器：宿主说没什么可压（返回 null）时不记账', async 
 })
 
 test('preset 没挂 compaction 时不压缩并报明确原因', async () => {
-  const id = intakeIdOf('intake', 'C:/repo')
+  const id = intakeIdOf('intake', 'C:/repo', 'w1')
   const store = { state: { singleSession: {}, lastError: null }, save() {} }
   const config = normalizeConfig({ singleSession: { enabled: true, pressureRatio: 0.1 } })
   const m = createSingleSessionMaintainer({
@@ -182,7 +182,7 @@ test('preset 没挂 compaction 时不压缩并报明确原因', async () => {
 })
 
 test('手动压缩：运行中拒绝（code=busy）；未知会话 not-found', async () => {
-  const id = intakeIdOf('intake', 'C:/repo')
+  const id = intakeIdOf('intake', 'C:/repo', 'w1')
   const busy = harness({ sessions: [{ sessionId: id, cwd: 'C:/repo' }], state: { running: true, queue: [], pendingInput: [], cursor: 3 } })
   await assert.rejects(() => busy.maintainer.compactManual(id), (error) => error.code === 'busy')
   await assert.rejects(() => busy.maintainer.compactManual('nope'), (error) => error.code === 'not-found')

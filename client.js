@@ -44,6 +44,7 @@ window.__ModuleLoader__.load({
         recent: '最近活动', sourceHealth: '源健康', noSources: '还没有启用任何源。',
         stateOk: '正常', stateFail: '异常', watermark: '水位', added: '本轮新增',
         confirmCompact: '压缩可能消耗一次模型调用，确定现在压缩？',
+        boardTitle: 'Superagent 工单', boardRunning: '进行中 {count}', boardPending: '待处理 {count}', boardTotal: '共 {count}',
       },
       en: {
         title: 'Superagent console',
@@ -78,6 +79,7 @@ window.__ModuleLoader__.load({
         recent: 'Recent activity', sourceHealth: 'Source health', noSources: 'No source enabled yet.',
         stateOk: 'OK', stateFail: 'Error', watermark: 'Watermark', added: 'Added',
         confirmCompact: 'Compacting may cost one model call. Compact now?',
+        boardTitle: 'Superagent tickets', boardRunning: '{count} running', boardPending: '{count} queued', boardTotal: '{count} total',
       },
     }
 
@@ -263,6 +265,69 @@ window.__ModuleLoader__.load({
     function PressureBar({ ratio }) {
       const level = ratio >= 0.85 ? 'bad' : ratio >= 0.5 ? 'warn' : ''
       return h('div', { className: `syh-bar ${level}` }, h('i', { style: { width: `${Math.min(100, Math.round(ratio * 100))}%` } }))
+    }
+
+    // 会话内任务板：像智能体团队一样，在会话头看到这个单会话的工单进度。
+    const BOARD_CSS = `
+.syhb{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:9px;padding:8px 10px;margin:6px 0;font:12px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.syhb h4{margin:0 0 6px;font-size:12px;font-weight:600;display:flex;gap:8px;align-items:center;color:var(--dsw-alias-label-primary)}
+.syhb .syhb-muted{color:var(--dsw-alias-label-secondary);font-weight:400}
+.syhb-row{display:flex;gap:6px;align-items:center;padding:3px 0;color:var(--dsw-alias-label-primary)}
+.syhb-row:hover{background:var(--dsw-alias-bg-layer-2)}
+.syhb-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;background:var(--dsw-alias-label-secondary)}
+.syhb-dot.running{background:var(--dsw-alias-brand-primary)}
+.syhb-dot.queued,.syhb-dot.waiting{background:var(--dsw-alias-state-warn-primary)}
+.syhb-dot.done{background:var(--dsw-alias-state-success-primary)}
+.syhb-dot.failed{background:var(--dsw-alias-state-error-primary)}
+.syhb-subject{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+`
+
+    function SessionBoard(props) {
+      const t = useT(props.ctx)
+      const sessionId = props.sessionId
+      const [tickets, setTickets] = React.useState([])
+      React.useEffect(() => {
+        if (!sessionId) return undefined
+        let alive = true
+        const load = async () => {
+          try {
+            const response = await fetch(`${BASE}/status?sessionId=${encodeURIComponent(sessionId)}`, { cache: 'no-store' })
+            if (!response.ok) return
+            const data = await response.json()
+            if (alive) setTickets(Array.isArray(data.tickets) ? data.tickets : [])
+          } catch {
+            /* 控制台不可用时任务板静默 */
+          }
+        }
+        load()
+        const timer = setInterval(load, 5000)
+        return () => { alive = false; clearInterval(timer) }
+      }, [sessionId])
+      const visible = tickets.slice(-8).reverse()
+      if (visible.length === 0) return null
+      const running = tickets.filter((item) => item.status === 'running').length
+      const pending = tickets.filter((item) => item.status === 'queued').length
+      return h('section', { className: 'syhb', 'data-superagent-board': '' },
+        h('style', null, BOARD_CSS),
+        h('h4', null, t('boardTitle'),
+          h('span', { className: 'syhb-muted' }, [
+            running > 0 ? t('boardRunning', { count: running }) : null,
+            pending > 0 ? t('boardPending', { count: pending }) : null,
+            t('boardTotal', { count: tickets.length }),
+          ].filter(Boolean).join(' · ')),
+        ),
+        visible.map((ticket) => h('div', {
+          key: ticket.id,
+          className: 'syhb-row',
+          title: ticket.summary || ticket.lastError || ticket.title || ticket.id,
+          onClick: () => { try { props.ctx.layout.selectPanel(PANEL_ID) } catch { /* 忽略 */ } },
+          style: { cursor: 'pointer' },
+        },
+          h('i', { className: `syhb-dot ${ticket.status}` }),
+          h('span', { className: 'syhb-subject' }, ticket.title || ticket.id),
+          h('span', { className: 'syhb-muted' }, t(ticket.status) || ticket.status),
+        )),
+      )
     }
 
     function Console({ ctx, compact = false, onClose }) {
@@ -666,8 +731,15 @@ window.__ModuleLoader__.load({
           locale: NS,
         }, Icon))
 
-        ctx.inject(['sidebarRightTabs', 'sidebarRight'], (child) => {
-          const tabs = child.get('sidebarRightTabs') ?? child.sidebarRightTabs
+        // 会话内任务板：挂在会话头 subagent 区（和智能体团队同区，组件独立）。
+        ctx.slots.inject('conversation.session.header.actions.subagent.footer', () => ctx.slots.register({
+          name: 'conversation.session.header.actions.subagent.footer',
+          key: NS,
+          locale: NS,
+          inject: () => ({ ctx }),
+        }, SessionBoard))
+
+        ctx.inject(['sidebarRightTabs', 'sidebarRight'], (child) => {          const tabs = child.get('sidebarRightTabs') ?? child.sidebarRightTabs
           services.right = child.get('sidebarRight') ?? child.sidebarRight ?? null
           if (!tabs || typeof tabs.register !== 'function') return
           child.effect(() => tabs.register({

@@ -61,6 +61,11 @@ test('client 模块：注册左栏图标、主面板、右侧页签类型', () =
   assert.equal(body.options.key, 'dsh-superagent-yh')
   const title = slots.find((entry) => entry.options.name === 'sidebar.right.pane.tab.title')
   assert.ok(title, '缺少右侧栏标题')
+
+  const board = slots.find((entry) => entry.options.name === 'conversation.session.header.actions.subagent.footer')
+  assert.ok(board, '缺少会话内任务板')
+  assert.equal(board.options.key, 'dsh-superagent-yh')
+  assert.equal(typeof board.component, 'function')
 })
 
 test('client 模块：没有 better-sidebar 时不注册右栏，也不抛错', () => {

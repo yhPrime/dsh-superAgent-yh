@@ -1,6 +1,8 @@
 # 子计划书 · 单会话（会话内智能体团队）+ UI
 
-> 版本：v2.8（**定稿**）｜状态：**定稿（2026-11-24 用户选 A）**｜定稿日期：2026-11-24｜权威范围：单会话模式的「表现形式与执行形态」+ 控制台 UI。不改源协议、不改主线 relay。
+> 版本：v2.9（**未定稿**）｜状态：**未定稿（等用户授权；v2.9 修订未经批准不得动代码）**｜上次定稿：v2.8（2026-11-24）｜权威范围：单会话模式的「表现形式与执行形态」+ 控制台 UI。不改源协议、不改主线 relay。
+>
+> **v2.9 修订（未定稿，2026-11-24 用户指示）**：用户要求「单会话应该默认使用极简模式这样 token 消耗最小，超级智能体插件只给单会话拼接必要的上下文」。这与 v2.8/D27「单会话切成重调度者 preset」方向相反——D27 每轮都要付 persona + 全套工具 schema 的钱，且每张工单还把路由 prompt 灌进用户会话。本版改为：单会话默认跑宿主内置 **`minimal`（极简模式）**；插件只往单会话写必要的东西（用户的话、relay 三条短消息、路由一问一答）；worker 子智能体用宿主 `startActivation` 的 `agentPreset` 字段**显式指定** `dsh-superagent-yh-worker`，不再靠继承父 preset。
 >
 > **v2.8 修订（2026-11-24 用户选 A）**：单会话登记时**切换到一个调度者 preset**（`dsh-superagent-yh-orchestrator`），让它在直接对话里也像智能体团队一样把任务派给子智能体，而不是自己干。另开一份占位计划 `子计划书-单会话UI修改.md`（状态：待做计划）。
 >
@@ -99,11 +101,13 @@
 
 | 文件 | 改动 |
 |---|---|
-| `lib/executor.js` | **重构为统一三层管线**：resolveTarget/route/spawnWorker/teardown/parseResult 各一份，四个源共用；不再为工单新建顶层会话（旧路径仅 `singleSession.enabled=false` 回退） |
-| `lib/orchestrator.js`（新） | 路由 mandate 组装、目标会话判定解析（accept/attach/stop/ignore+preset）、超时回退 rules |
+| `lib/executor.js` | **重构为统一三层管线**：resolveTarget/route/spawnWorker/teardown/parseResult 各一份，四个源共用；不再为工单新建顶层会话（旧路径仅 `singleSession.enabled=false` 回退）；`runSubagent()` 的 `startActivation` **显式传 `agentPreset: config.workerPreset`** |
+| `lib/orchestrator.js`（新） | 路由 mandate 组装、目标会话判定解析（accept/attach/stop/ignore+preset）、超时回退 rules；投递通道按 D28 选项（单会话 prompt 或 `ctx.llm` 一次性） |
 | `lib/assessment.js`（新） | 按源研判：QQ 用 `ctx.llm` 严格 JSON、批处理、超时；其它源直通 accept；失败回退 accept + lastError |
 | worker preset（cordis.patch.yml） | 加回 subagent 派生工具（第三层），其余精简不变 |
-| `lib/single-session.js` | 暴露「取该工作空间接单会话的 live agent」给 executor（resolve agent + ensure 会话） |
+| `cordis.patch.yml`（v2.9） | **删除 `dsh-superagent-yh-orchestrator-preset` 整行**（order 91） |
+| `lib/config.js`（v2.9） | 删 `orchestratorPreset`；`singleSession` 增 `preset`（默认 `'minimal'`），`panel.mergeSettings` 白名单同步 |
+| `lib/single-session.js` | 暴露「取该工作空间接单会话的 live agent」给 executor（resolve agent + ensure 会话）；登记/解除/reconcile 改按 `singleSession.preset`（默认 `minimal`）切换与恢复 |
 | `lib/panel.js` | `/status` 支持 `?sessionId=` 过滤该工作空间工单；tickets 增加 `mode: 'team'|'worker'` |
 | `client.js` | 新增 TeamTaskBoard 组件 + 注册 `conversation.session.header.actions.subagent.footer`；工单「会话」按钮跳转调整 |
 | `test/unit/executor-team.test.js`（新） | 激活参数、串行、dispose、结果解析（工具/文本/无回报）、**完工即卸载** |
@@ -198,18 +202,21 @@
 | 控制台 | 工作空间列表只渲染已登记的；每张卡加「解除单会话」（红色） |
 | 移除 | maintainer 的 autoCreate 段；不再自动 pin 未登记会话 |
 
-### 2.13 单会话 = 调度者（v2.8 / D27）
+### 2.13 单会话 = 极简模式，插件只拼必要上下文（v2.9 / D28，取代 v2.8 / D27）
 
-- 新增 preset `dsh-superagent-yh-orchestrator`（**工具集是 worker 的超集** + subagent 派生工具；persona 里写明"你是调度者：收到任务先派子智能体执行，自己只做路由/汇总"）。
-- 登记单会话时：`agentPresets.select(agent, 'dsh-superagent-yh-orchestrator')` 切换过去；记录原 preset 到 `state.singleSessionPrevPreset[workspaceId]`。
-- 解除登记时：如果会话还活着，切回原 preset；不活就只清记录（下次打开仍是调度者 preset，控制台会提示）。
-- 为什么用"超集"而不是纯调度者：executor 派出的 worker 子智能体**继承父会话 preset**，纯调度者 preset 没有 fs/bash 工具会让 worker 干不了活。
-- 直接对话 = 调度者决定"自己答还是派活"；外部工单 = 仍由 executor 直接派 worker 子智能体（不经模型二次决策）。
+- **默认 preset = 宿主内置 `minimal`（极简模式）**：新增配置 `singleSession.preset`，默认 `'minimal'`。登记单会话时 `agentPresets.select(agent, singleSession.preset)` 切过去，原 preset 记到 `state.singleSessionPrevPreset[workspaceId]`；解除时会话活着就切回原 preset，不活只清记录。维护器 reconcile 每轮仍确保它停在该 preset（保持 v2.8 的"补切"行为）。
+- **删除重 preset**：`cordis.patch.yml` 里 `dsh-superagent-yh-orchestrator-preset` 整行（order 91）删除；`config.orchestratorPreset` 删除；`lib/single-session.js` 不再引用它。理由：它存在的唯一依据是"worker 继承父 preset，所以父必须是 worker 的超集"，而这个依据已被宿主能力推翻（下一条），留着就是每轮白付 token。
+- **worker 显式带 preset**：`lib/executor.js` 的 `runSubagent()` 在 `subagents.startActivation({...})` 里加 `agentPreset: config.workerPreset`。依据：宿主 `startActivation` 接受 `agentPreset`（asar 内实测 `startActivation({provider:'spawn', label, delivery:'caller', signal, childId, parent: agent, agentPreset: 'cordis', cwd, prompt, outputSchema})`）。于是父会话可以是极简模式，worker 仍拿得到 bash/fs/subagent 全套工具。
+- **极简模式自带的能力正合用**：图片读取、自动历史压缩、空闲 `/compact`；维护器注册时要的 `compaction` 服务因此仍在（须探针实测，见 R39）。
+- **单会话历史里只该有三种东西**：用户自己的话；relay 的开工/需人/完成三条短消息（每工单 ≤1K token 目标）；路由判定的一问一答。插件的 persona、工具 schema、长 mandate 都不再进单会话——它们随 preset 消失或只存在于 worker 会话内。
+- **直接对话不再"派活"**：极简模式的单会话就是普通对话（自己答或说做不了）。派活只发生在外部工单进管线时，由 executor 直接 spawn worker 子智能体，不经单会话模型二次决策。若以后想要"对话里也能派活"，那是显式打开重 preset 的可选项，不进默认行为。
+- **路由通道二选一（§7 D28 待拍板）**：选项 1 保留 `ctx.sessionController.prompt` 投 routePrompt（改动最小，代价是每张工单在用户会话留一问一答）；选项 2 改走 `ctx.llm` 一次性调用、复用 `lib/assessment.js` 的严格 JSON + 超时 + 回退 plumbing（单会话只留 relay 短消息，最省上下文，多改一处代码）。
 
 ## 3 里程碑
 
 | 阶段 | 内容 | 退出条件 | 估时 |
 |---|---|---|---|
+| T0 | preset 切换与 `startActivation.agentPreset`（含探针：`select` 能否切内置 `minimal`、minimal 是否挂 `compaction`） | 探针输出两项均成立 | 0.25 天 |
 | T1 | executor team 路径 + 结果解析 + 单测（stub subagents） | 单测覆盖激活/串行/dispose/解析 | 0.5 天 |
 | T2 | `/status?sessionId=` 过滤 + tickets.mode | 路由实测 | 0.25 天 |
 | T3 | TeamTaskBoard UI + 注册 slot | 客户端 smoke + 页面走查 | 0.5 天 |
@@ -237,6 +244,9 @@
 | E12.14 | QQ 研判可用开关关闭（`sources.qq.assessment='off'`）；面板能看到研判次数/忽略数 |
 | E12.15 | **QQ 研判同时选工作区**：输出 `workspace` 必须在候选清单内；清单外值被丢弃并回退；无法判定落默认工作空间且面板可见 |
 | E12.16 | 确定性线索优先：GitHub/飞书（或 QQ 显式配置 workspace）不受模型选择影响 |
+| E12.17 | **单会话默认极简**：未改配置时登记后该会话 preset = `minimal`（宿主 UI 显示「极简模式」）；解除后切回原 preset、不残留 |
+| E12.18 | **worker 不继承父 preset**：子智能体激活参数里 `agentPreset = dsh-superagent-yh-worker`，其会话内 bash/fs 工具可用 |
+| E12.19 | **单会话只增必要上下文**：一张工单跑完，单会话历史只增加 relay 短消息（+ 路由一问一答，若 D28 选 1）；无插件 persona / 工具 schema / 长 mandate 注入 |
 
 ## 5 风险
 
@@ -250,6 +260,8 @@
 | R35 | 宿主成员菜单可能留「已完成」历史标记（无公开删除接口） | dispose+archive 保证不运行/不在侧栏；任务板做干净主视图；如仍占地方另开子计划，不擅自改宿主 |
 | R36 | orchestrator 用模型路由可能误判/超时/不回报 | 规则 admission 仍作安全闸；超时/拒答回退 rules 并记 lastError；路由 mandate 只给路由事实不给实现计划 |
 | R37 | QQ 研判每批一次模型调用，可能贵/慢/误判 | 只对 QQ、批处理、超时短；失败回退 accept 不丢活；面板可见研判次数，可一键关；连续失败退避 |
+| R39 | `agentPresets.select` 未必接受内置 id（`minimal`），或 minimal 未挂 `compaction`（维护器 239 行要它） | T0 探针先验；切不动就回落 `standard` 并明确报错，不静默；仍不行则改回内置切换机制前先问用户 |
+| R40 | 极简模式没有 fs/bash，若哪天真把工单交给单会话自己干会干不了活 | executor 固定 spawn worker，父会话只做路由/汇总；E12.18 守住 |
 | R38 | 模型选错工作区（幻觉路径/重名） | 只接受候选清单里的 id/path；清单外一律丢弃；无法判定落默认工作空间并记 lastError |
 
 ## 6 与已实现部分的关系
@@ -273,6 +285,7 @@
 - **D24**（2026-11-24 用户拍板）：**QQ 的 `confirmWrites` 默认开启**——结果直接发回原群/好友；回写仍受 `authors`/`allowedGroups` 收窄。发送时机保持现状（完成/需要人/失败各一条，开工不发）。
 - **D25**（2026-11-24 用户指示）：单会话做成**胶囊式开关**；开启时每个工作区的接单会话 `pinSession` **顶置**，关闭时 `unpinSession` 恢复。
 - **D26**（2026-11-24 用户定，v2.7 取代 D25 的自动建/自动 pin）：单会话改为**手动新建会话 + 权限右侧胶囊「超级智能体」登记**；登记后唯一、禁止入档删除、只能从控制台解除；控制台只列已登记的工作区（§2.12）。
-- **D27**（2026-11-24 用户选 A）：登记时切换到**调度者 preset**，让单会话在直接对话里也把任务派给子智能体；解除时切回原 preset（§2.13）。单会话 UI 的后续修改另立占位计划 `子计划书-单会话UI修改.md`（待做计划）。
+- **D27**（2026-11-24 用户选 A，**已被 D28 取代**）：登记时切换到**调度者 preset**，让单会话在直接对话里也把任务派给子智能体；解除时切回原 preset（§2.13）。单会话 UI 的后续修改另立占位计划 `子计划书-单会话UI修改.md`（待做计划）。
+- **D28**（2026-11-24 用户指示，v2.9 待授权）：单会话**默认跑宿主极简模式**（`singleSession.preset='minimal'`），不再切重调度者 preset；删 `dsh-superagent-yh-orchestrator-preset` 与 `config.orchestratorPreset`；worker 由 `startActivation({agentPreset: config.workerPreset})` 显式指定；插件只向单会话拼接必要上下文（用户的话 + relay 三条短消息 + 路由一问一答）。**待用户二选一**：路由走会话内 prompt（选项 1，改动最小）还是 `ctx.llm` 一次性调用（选项 2，最省上下文、多改一处）；未选前不实施。
 - 已确认口径（2026-11-24）：**很像智能体团队，但不是完全一样**——借鉴表现形式，不复制其开关/组件/任务语义（§1.1）。
 - **2026-11-24 用户拍板 D14–D23，本文件定稿（v2.5）**，按 T1→T4 执行；四路测试按迭代规则跑完再收口。

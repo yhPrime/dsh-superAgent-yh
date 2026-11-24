@@ -36,7 +36,7 @@ window.__ModuleLoader__.load({
         workspace: '工作空间', wsPath: '目录', wsSession: '接单会话', wsPressure: '上下文占用',
         wsLastCompact: '上次压缩', wsNever: '还没压缩过', wsMissing: '无接单会话', wsRunning: '运行中',
         compactNow: '立即压缩', compacting: '压缩中…', compactOk: '已压缩', compactSkip: '宿主判断无需压缩',
-        noWorkspace: '开启「单会话模式」后，这里会列出每个工作空间的接单会话。',
+        noWorkspace: '还没有登记单会话的工作区。在某个工作区新建会话，点亮输入区的「超级智能体」胶囊即可。',
         singleTitle: '单会话模式', singleHint: '每个工作空间只保留一个接单会话；空闲或上下文超阈值时自动压缩旧上下文。worker 仍每工单独立。',
         singleEnabled: '启用单会话模式', idleMinutes: '空闲多少分钟后压缩', pressureRatio: '上下文占用超过此比例也压缩',
         aggressive: '超级压缩（只保留最近几轮）', keepRecentTurns: '超级压缩保留最近几轮', autoCreate: '没有接单会话时自动创建',
@@ -46,6 +46,7 @@ window.__ModuleLoader__.load({
         confirmCompact: '压缩可能消耗一次模型调用，确定现在压缩？',
         boardTitle: 'Superagent 工单', boardRunning: '进行中 {count}', boardPending: '待处理 {count}', boardTotal: '共 {count}',
         capsule: '单会话', capsuleOn: '单会话已开：各工作区的接单会话已顶置', capsuleOff: '单会话已关：已取消顶置',
+        pill: '超级智能体', pillTip: '点亮：把本会话设为本工作区的单会话', pillOnTip: '本工作区已登记这个单会话；删除请到控制台',
       },
       en: {
         title: 'Superagent console',
@@ -72,7 +73,7 @@ window.__ModuleLoader__.load({
         workspace: 'Workspace', wsPath: 'Path', wsSession: 'Intake session', wsPressure: 'Context usage',
         wsLastCompact: 'Last compact', wsNever: 'never', wsMissing: 'no intake session', wsRunning: 'running',
         compactNow: 'Compact now', compacting: 'Compacting…', compactOk: 'Compacted', compactSkip: 'Host says nothing to compact',
-        noWorkspace: 'Enable single-session mode to list one intake session per workspace here.',
+        noWorkspace: 'No workspace has a registered single session yet. Create a session in a workspace and turn on the "Superagent" pill in its input area.',
         singleTitle: 'Single-session mode', singleHint: 'Each workspace keeps one intake session; old context is compacted when idle or over the threshold. Workers stay per-ticket.',
         singleEnabled: 'Enable single-session mode', idleMinutes: 'Compact after idle (minutes)', pressureRatio: 'Compact when context usage exceeds',
         aggressive: 'Aggressive (keep only recent turns)', keepRecentTurns: 'Turns to keep when aggressive', autoCreate: 'Create an intake session when missing',
@@ -82,6 +83,7 @@ window.__ModuleLoader__.load({
         confirmCompact: 'Compacting may cost one model call. Compact now?',
         boardTitle: 'Superagent tickets', boardRunning: '{count} running', boardPending: '{count} queued', boardTotal: '{count} total',
         capsule: 'Single session', capsuleOn: 'Single session on: intake sessions pinned to the top', capsuleOff: 'Single session off: pins removed',
+        pill: 'Superagent', pillTip: 'Turn on: make this session the single session of this workspace', pillOnTip: 'Registered as this workspace single session; delete from the console',
       },
     }
 
@@ -272,6 +274,59 @@ window.__ModuleLoader__.load({
       return h('label', { className: 'syh-check' }, h('input', { type: 'checkbox', checked: Boolean(checked), onChange: (event) => onChange(event.target.checked) }), label)
     }
 
+    // 会话输入区权限右侧的「超级智能体」胶囊：点亮即把本会话登记为该工作区唯一的单会话。
+    const PILL_CSS = `
+.sysp{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);border-radius:999px;padding:2px 10px;font:12px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;cursor:pointer;user-select:none;white-space:nowrap}
+.sysp:hover:not(:disabled){border-color:var(--dsw-alias-border-l2)}
+.sysp:disabled{cursor:default;opacity:.85}
+.sysp.on{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary);background:color-mix(in srgb,var(--dsw-alias-brand-primary) 10%,transparent)}
+.sysp i{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+`
+
+    function SingleSessionPill(props) {
+      const t = useT(props.ctx)
+      const sessionId = props.sessionId
+      const [state, setState] = React.useState(null)
+      const [busy, setBusy] = React.useState(false)
+      const load = React.useCallback(async () => {
+        if (!sessionId) return
+        try {
+          const response = await fetch(`${BASE}/single?sessionId=${encodeURIComponent(sessionId)}`, { cache: 'no-store' })
+          if (!response.ok) return
+          setState(await response.json())
+        } catch {
+          /* 状态拿不到就不显示胶囊 */
+        }
+      }, [sessionId])
+      React.useEffect(() => {
+        load()
+        const timer = setInterval(load, 5000)
+        return () => clearInterval(timer)
+      }, [load])
+      const turnOn = async () => {
+        setBusy(true)
+        try {
+          await post('/action', { action: 'register-single', sessionId })
+          await load()
+        } catch (error) {
+          if (typeof window !== 'undefined' && window.alert) window.alert(String(error?.message || error))
+        } finally {
+          setBusy(false)
+        }
+      }
+      if (!state?.ok || state.enabled !== true) return null
+      if (!state.registered && state.workspaceOccupied) return null
+      if (!state.registered && !state.workspaceId) return null
+      const on = state.registered === true
+      return h('button', {
+        type: 'button',
+        className: `sysp ${on ? 'on' : ''}`,
+        disabled: on || busy,
+        title: on ? t('pillOnTip') : t('pillTip'),
+        onClick: on ? undefined : turnOn,
+      }, h('style', null, PILL_CSS), h('i', null), t('pill'))
+    }
+
     function PressureBar({ ratio }) {
       const level = ratio >= 0.85 ? 'bad' : ratio >= 0.5 ? 'warn' : ''
       return h('div', { className: `syh-bar ${level}` }, h('i', { style: { width: `${Math.min(100, Math.round(ratio * 100))}%` } }))
@@ -418,6 +473,17 @@ window.__ModuleLoader__.load({
         }
       })
 
+      const deleteSingle = (sessionId) => run(async () => {
+        if (typeof window !== 'undefined' && typeof window.confirm === 'function' && !window.confirm(t('deleteSingleConfirm'))) return
+        setBusySession(sessionId)
+        try {
+          await post('/action', { action: 'delete-single', sessionId })
+          setMsg(t('deleteSingleDone'))
+        } finally {
+          setBusySession('')
+        }
+      })
+
       const openSession = (sessionId) => {
         const workspace = services.workspace
         if (!workspace?.openSession) { setError(t('noHostService')); return }
@@ -510,6 +576,7 @@ window.__ModuleLoader__.load({
                       h('span', { className: `syh-badge syh-${workspace.running ? 'running' : workspace.status === 'missing' ? 'failed' : 'done'}` }, workspace.running ? t('wsRunning') : (workspace.status || 'idle')),
                       workspace.sessionId ? h('button', { className: 'syh-btn', onClick: () => openSession(workspace.sessionId) }, t('session')) : null,
                       workspace.sessionId ? h('button', { className: 'syh-btn', disabled: busySession === workspace.sessionId, onClick: () => compactNow(workspace.sessionId) }, busySession === workspace.sessionId ? t('compacting') : t('compactNow')) : null,
+                      workspace.sessionId ? h('button', { className: 'syh-btn syh-btn-danger', disabled: busySession === workspace.sessionId, onClick: () => deleteSingle(workspace.sessionId) }, t('deleteSingle')) : null,
                     ),
                   )),
           ),
@@ -773,6 +840,14 @@ window.__ModuleLoader__.load({
           locale: NS,
           inject: () => ({ ctx }),
         }, SessionBoard))
+
+        // 会话输入区（权限右侧）的「超级智能体」胶囊：登记本工作区唯一的单会话。
+        ctx.slots.inject('conversation.input.right', () => ctx.slots.register({
+          name: 'conversation.input.right',
+          key: NS,
+          locale: NS,
+          inject: () => ({ ctx }),
+        }, SingleSessionPill))
 
         ctx.inject(['sidebarRightTabs', 'sidebarRight'], (child) => {          const tabs = child.get('sidebarRightTabs') ?? child.sidebarRightTabs
           services.right = child.get('sidebarRight') ?? child.sidebarRight ?? null

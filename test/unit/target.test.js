@@ -1,114 +1,64 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { pickWorkspace, pickSession, createTargetResolver } from '../../lib/target.js'
-import { intakeIdOf } from '../../lib/single-session.js'
 
 const workspaces = [
   { id: 'w-a', path: 'C:/repo-a' },
   { id: 'w-b', path: 'C:/repo-b' },
 ]
 
-test('pickWorkspace：确定性线索优先于研判', () => {
-  const out = pickWorkspace({ ticket: { workspaceHint: 'C:/repo-a' }, assessment: { workspace: { id: 'w-b' } }, workspaces })
-  assert.equal(out.workspace.id, 'w-a')
-  assert.equal(out.via, 'hint')
-})
-
-test('pickWorkspace：没有线索用研判给的 workspace', () => {
-  const out = pickWorkspace({ ticket: {}, assessment: { workspace: { id: 'w-b' } }, workspaces })
-  assert.equal(out.workspace.id, 'w-b')
-  assert.equal(out.via, 'assessment')
-})
-
-test('pickWorkspace：都没有落默认；默认也没有则 none', () => {
+test('pickWorkspace：确定性线索 > 研判 > 默认', () => {
+  assert.equal(pickWorkspace({ ticket: { workspaceHint: 'C:/repo-a' }, assessment: { workspace: { id: 'w-b' } }, workspaces }).workspace.id, 'w-a')
+  assert.equal(pickWorkspace({ ticket: {}, assessment: { workspace: { id: 'w-b' } }, workspaces }).workspace.id, 'w-b')
   assert.equal(pickWorkspace({ ticket: {}, workspaces, defaultWorkspaceId: 'w-a' }).via, 'default')
-  const none = pickWorkspace({ ticket: {}, workspaces })
-  assert.equal(none.via, 'none')
-  assert.equal(none.workspace, null)
+  assert.equal(pickWorkspace({ ticket: {}, workspaces }).via, 'none')
 })
 
-test('pickWorkspace：研判给的清单外 workspace 一律丢弃', () => {
-  assert.equal(pickWorkspace({ ticket: {}, assessment: { workspace: { id: 'w-x' } }, workspaces }).via, 'none')
-})
-
-test('pickWorkspace：清单外的 hint 若是路径则直接采用（仓库未注册工作区）', () => {
-  const out = pickWorkspace({ ticket: { workspaceHint: 'D:/unregistered/repo' }, workspaces })
-  assert.equal(out.via, 'hint')
-  assert.equal(out.workspace.path, 'D:/unregistered/repo')
-  assert.equal(out.workspace.synthetic, true)
-  // 非路径形态的 id 不乱当路径
+test('pickWorkspace：清单外路径成合成工作区（无 id），清单外 id 丢弃', () => {
+  const synth = pickWorkspace({ ticket: { workspaceHint: 'D:/unregistered' }, workspaces })
+  assert.equal(synth.via, 'hint')
+  assert.equal(synth.workspace.synthetic, true)
+  assert.equal(synth.workspace.id, null)
   assert.equal(pickWorkspace({ ticket: { workspaceHint: 'w-unknown' }, workspaces }).via, 'none')
 })
 
-test('pickSession：优先 intake id，其次同 cwd 的 intake- 会话', () => {
-  const wanted = intakeIdOf('intake', 'C:/repo-a', 'w-a')
-  assert.equal(pickSession(workspaces[0], [{ sessionId: wanted, cwd: 'C:/repo-a' }]).sessionId, wanted)
-  assert.equal(pickSession(workspaces[0], [{ sessionId: 'intake-x-1', cwd: 'C:\\repo-a' }]).sessionId, 'intake-x-1')
-  assert.equal(pickSession(workspaces[0], [{ sessionId: 'session-other', cwd: 'C:/repo-a' }]), null)
+test('pickSession：只认已登记的单会话', () => {
+  assert.equal(pickSession(workspaces[0], 's-1').sessionId, 's-1')
+  assert.equal(pickSession(workspaces[0], null), null)
+  assert.equal(pickSession({ path: 'C:/x' }, 's-1'), null)
 })
 
-function harness({ sessions = [], workspaces: ws = workspaces, single = {}, createThrows = false } = {}) {
-  const created = []
+function harness({ registered = { 'w-a': 's-1' } } = {}) {
   const resolver = createTargetResolver({
-    ctx: {}, config: { singleSession: { sessionIdPrefix: 'intake', autoCreate: true, ...single } }, log: () => {}, redact: (x) => x,
+    ctx: {}, config: { singleSession: { sessionIdPrefix: 'intake' } }, log: () => {}, redact: (x) => x,
     deps: {
-      listWorkspaces: () => ws,
-      listSessions: async () => sessions,
-      resolveByPath: async (path) => (ws.find((w) => w.path === path) ?? null),
-      createWorkspace: async (path) => { created.push({ registered: path }); return { id: 'w-new', path } },
-      createSession: async (request) => {
-        if (createThrows) throw new Error('create failed')
-        created.push(request)
-        return { sessionId: request.sessionId }
-      },
+      listWorkspaces: () => workspaces,
+      registeredSession: async (workspaceId) => registered[workspaceId] ?? null,
     },
   })
-  return { resolver, created }
+  return resolver
 }
 
-test('resolve：找到已有单会话', async () => {
-  const id = intakeIdOf('intake', 'C:/repo-a')
-  const { resolver } = harness({ sessions: [{ sessionId: id, cwd: 'C:/repo-a' }] })
-  const out = await resolver.resolve({ workspaceHint: 'C:/repo-a' }, null)
-  assert.equal(out.sessionId, id)
-  assert.equal(out.via, 'hint')
+test('resolve：工作区已登记单会话 → 返回它', async () => {
+  const out = await harness().resolve({ workspaceHint: 'C:/repo-a' }, null)
+  assert.equal(out.sessionId, 's-1')
+  assert.equal(out.workspace.id, 'w-a')
 })
 
-test('resolve：没有则按 autoCreate 建；关掉则报错', async () => {
-  const on = harness()
-  const out = await on.resolver.resolve({ workspaceHint: 'C:/repo-a' }, null)
-  assert.equal(out.sessionId, intakeIdOf('intake', 'C:/repo-a', 'w-a'))
-  assert.equal(on.created.length, 1)
-
-  const off = harness({ single: { autoCreate: false } })
-  const out2 = await off.resolver.resolve({ workspaceHint: 'C:/repo-a' }, null)
-  assert.equal(out2.sessionId, null)
-  assert.match(out2.error, /没有单会话/)
+test('resolve：没有登记的单会话 → 明确报错，不自动建', async () => {
+  const out = await harness({ registered: {} }).resolve({ workspaceHint: 'C:/repo-a' }, null)
+  assert.equal(out.sessionId, null)
+  assert.match(out.error, /没有登记单会话/)
 })
 
-test('resolve：建单会话时用 workspaceId 绑定工作区（不是 cwd）', async () => {
-  const h = harness()
-  await h.resolver.resolve({ workspaceHint: 'C:/repo-a' }, null)
-  const request = h.created[0]
-  assert.equal(request.sessionId, intakeIdOf('intake', 'C:/repo-a', 'w-a'))
-  assert.equal(request.workspaceId, 'w-a')
-  assert.equal(request.cwd, undefined)
+test('resolve：未注册成工作区的目录 → 提示先建工作区', async () => {
+  const out = await harness().resolve({ workspaceHint: 'D:/not-a-workspace' }, null)
+  assert.equal(out.sessionId, null)
+  assert.match(out.error, /还不是 DSH 工作区/)
 })
 
-test('pickSession：优先返回属于该 workspace 的会话', () => {
-  const list = [
-    { sessionId: 'intake-old', cwd: 'C:/repo-a' },
-    { sessionId: 'intake-new', cwd: 'C:/repo-a', workspaceId: 'w-a' },
-  ]
-  assert.equal(pickSession(workspaces[0], list).sessionId, 'intake-new')
-})
-
-test('resolve：找不到工作区 / 建会话失败都返回明确错误', async () => {
-  const none = harness()
-  const out = await none.resolver.resolve({}, null)
-  assert.match(out.error, /工作区/)
-
-  const failing = harness({ createThrows: true })
-  const out2 = await failing.resolver.resolve({ workspaceHint: 'C:/repo-a' }, null)
-  assert.match(out2.error, /建单会话失败/)
+test('resolve：找不到工作区', async () => {
+  const out = await harness().resolve({}, null)
+  assert.equal(out.sessionId, null)
+  assert.match(out.error, /找不到工单对应的工作区/)
 })

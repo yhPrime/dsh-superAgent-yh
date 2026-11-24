@@ -52,7 +52,7 @@ test('e2e：工单 queued → 研判 → 定位 → 路由 → 子智能体 → 
   }
 
   const assessment = createAssessment({ ctx, config, log, redact })
-  const targetResolver = createTargetResolver({ ctx, config, log, redact })
+  const targetResolver = createTargetResolver({ ctx, config, log, redact, deps: { listWorkspaces: () => [{ id: 'w1', path: 'C:/repo' }], registeredSession: async () => 'intake-repo' } })
   const orchestrator = createOrchestrator({ ctx, config, store, log, redact })
   const executor = createExecutor({
     ctx, config, store, log, redact,
@@ -116,7 +116,7 @@ test('e2e 健壮性：子智能体 dispose 失败不吞结果', async () => {
     relay: { send: async () => {} },
     sources: {},
     assessment: { assess: async () => ({ verdict: 'accept' }) },
-    targetResolver: createTargetResolver({ ctx, config, log, redact }),
+    targetResolver: createTargetResolver({ ctx, config, log, redact, deps: { listWorkspaces: () => [{ id: 'w1', path: 'C:/repo' }], registeredSession: async () => 'intake-repo' } }),
     orchestrator: { route: async () => ({ verdict: 'accept' }) },
     archiveSession: async () => { archived += 1 },
     getSubagents: () => ({

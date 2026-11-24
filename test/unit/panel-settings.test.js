@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { mergeSettings, configView, originAllowed } from '../../lib/panel.js'
+import { mergeSettings, configView, originAllowed, filterTicketsForSession } from '../../lib/panel.js'
 import { normalizeConfig, ConfigError } from '../../lib/config.js'
 
 const VERSION = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version
@@ -110,6 +110,18 @@ test('origin：同源/回环放行，跨源拒绝（含桌面代理端口不一�
   assert.equal(originAllowed(req('null'), expected), true)
   assert.equal(originAllowed(req('null', '8.8.8.8', 'evil.example:80'), expected), false)
   assert.equal(originAllowed(req('http://127.0.0.1:1', '8.8.8.8', 'evil.example:80'), expected), false)
+})
+
+test('filterTicketsForSession：按目标会话/工作区过滤，空 sessionId 不过滤', () => {
+  const tickets = [
+    { id: 'a', targetSessionId: 'intake-x', workspace: 'C:/repo-a' },
+    { id: 'b', targetSessionId: 'intake-y', workspace: 'C:/repo-b' },
+    { id: 'c', workspace: 'C:\\repo-a' },
+  ]
+  const workspaces = [{ sessionId: 'intake-x', path: 'C:/repo-a' }]
+  assert.deepEqual(filterTicketsForSession(tickets, 'intake-x', workspaces).map((t) => t.id), ['a', 'c'])
+  assert.deepEqual(filterTicketsForSession(tickets, 'intake-y', workspaces).map((t) => t.id), ['b'])
+  assert.equal(filterTicketsForSession(tickets, '', workspaces).length, 3)
 })
 
 test('configView 不回明文 token，只给 hasToken', () => {

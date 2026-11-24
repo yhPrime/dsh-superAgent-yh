@@ -1,0 +1,74 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { assessmentModeOf, parseVerdict, createAssessment } from '../../lib/assessment.js'
+import { normalizeConfig } from '../../lib/config.js'
+
+const ticket = { id: 'qq:1', source: 'qq', thread: 'group:1', actor: 'u1', title: '帮我看下这个报错', body: '截图里说 x is not defined', url: '' }
+
+test('按源选研判模式：QQ=agent，GitHub/飞书=off', () => {
+  const config = normalizeConfig({})
+  assert.equal(assessmentModeOf(config, 'qq'), 'agent')
+  assert.equal(assessmentModeOf(config, 'github'), 'off')
+  assert.equal(assessmentModeOf(config, 'feishu'), 'off')
+  assert.equal(config.sources.qq.assessment, 'agent')
+  assert.equal(config.sources.github.assessment, 'off')
+})
+
+test('显式配置覆盖默认', () => {
+  assert.equal(assessmentModeOf(normalizeConfig({ sources: { qq: { assessment: 'off' } } }), 'qq'), 'off')
+  assert.equal(assessmentModeOf(normalizeConfig({ sources: { github: { assessment: 'agent' } } }), 'github'), 'agent')
+})
+
+test('parseVerdict：合法/非法', () => {
+  assert.deepEqual(parseVerdict('{"verdict":"ignore","reason":"闲聊"}'), { verdict: 'ignore', reason: '闲聊', preset: undefined })
+  assert.equal(parseVerdict('{"verdict":"nope"}'), null)
+  assert.equal(parseVerdict('没有 JSON'), null)
+  assert.equal(parseVerdict(''), null)
+  assert.equal(parseVerdict('{"verdict":"accept","preset":"coder"}').preset, 'coder')
+})
+
+test('off 源直通 accept，且不调模型', async () => {
+  let calls = 0
+  const assessment = createAssessment({
+    ctx: {}, config: normalizeConfig({ sources: { github: { assessment: 'off' } } }), log: () => {}, redact: (x) => x,
+    deps: { call: async () => { calls += 1; return '{"verdict":"ignore"}' } },
+  })
+  const out = await assessment.assess({ ...ticket, source: 'github' })
+  assert.equal(out.verdict, 'accept')
+  assert.equal(out.mode, 'off')
+  assert.equal(calls, 0)
+})
+
+test('QQ 走模型：ignore/stop 生效并计数', async () => {
+  const assessment = createAssessment({
+    ctx: {}, config: normalizeConfig({}), log: () => {}, redact: (x) => x,
+    deps: { call: async () => '{"verdict":"ignore","reason":"闲聊"}' },
+  })
+  const out = await assessment.assess(ticket)
+  assert.equal(out.verdict, 'ignore')
+  assert.equal(out.mode, 'agent')
+  assert.equal(assessment.stats().calls, 1)
+  assert.equal(assessment.stats().ignored, 1)
+})
+
+test('模型输出不可解析 → 回退 accept 并记错误', async () => {
+  const assessment = createAssessment({
+    ctx: {}, config: normalizeConfig({}), log: () => {}, redact: (x) => x,
+    deps: { call: async () => '我觉得可以' },
+  })
+  const out = await assessment.assess(ticket)
+  assert.equal(out.verdict, 'accept')
+  assert.equal(out.reason, 'fallback')
+  assert.match(out.error, /不可解析/)
+  assert.equal(assessment.stats().fallbacks, 1)
+})
+
+test('模型抛错 → 回退 accept（不丢活）', async () => {
+  const assessment = createAssessment({
+    ctx: {}, config: normalizeConfig({}), log: () => {}, redact: (x) => x,
+    deps: { call: async () => { throw new Error('llm down') } },
+  })
+  const out = await assessment.assess(ticket)
+  assert.equal(out.verdict, 'accept')
+  assert.match(out.error, /llm down/)
+})

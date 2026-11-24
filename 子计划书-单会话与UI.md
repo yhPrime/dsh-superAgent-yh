@@ -1,6 +1,8 @@
 # 子计划书 · 单会话（会话内智能体团队）+ UI
 
-> 版本：v2.3（**定稿**）｜状态：**定稿（2026-11-24 拍板 D17/D18/D19/D20）**｜定稿日期：2026-11-24｜权威范围：单会话模式的「表现形式与执行形态」+ 控制台 UI。不改源协议、不改主线 relay。
+> 版本：v2.4（**定稿**）｜状态：**定稿（2026-11-24 拍板 D14–D22）**｜定稿日期：2026-11-24｜权威范围：单会话模式的「表现形式与执行形态」+ 控制台 UI。不改源协议、不改主线 relay。
+>
+> **v2.4 修订（2026-11-24 用户指示）**：监管者（Assessment）从「全关」改为**按源开启**——**QQ 源走模型研判**（QQ 来的任务五花八门，需要模型判断是不是真活、该不该派），GitHub/飞书仍走规则、零调用。
 >
 > **v2.3 修订说明（2026-11-24）**：用户指出「orchestrator/worker/subagent 三角色是原版超级智能体本来就有的，应该一开始就做进来」。核对主计划书 v1.0 §2「简化」表：当时把 orchestrator 降为规则代码、并在 worker preset 里裁掉调度/子代理工具——这丢掉了原版的三层角色结构。本版**恢复三层角色为核心**（不再是可选项），取代 v2.2 的「两层」设计。主计划 §2 中「orchestrator→规则」「worker 去调度」两行的简化，自本计划定稿起在执行形态上被本版取代。
 >
@@ -55,6 +57,7 @@
 
 ```
 外部监听器 → ticket(queued)                  [admission/限流/幂等 共用]
+→ assessment(ticket)                         [共用入口；QQ=模型研判，其它源=规则直通]
 → resolveTarget(ticket)                      [共用：按工作空间找到那个单会话]
 → orchestrator.route(ticket, target)         [共用：目标会话 agent 判定或 rules 回退]
 → ensureWorktree(ticket)                     [共用：每工单独立目录]
@@ -97,7 +100,8 @@
 | 文件 | 改动 |
 |---|---|
 | `lib/executor.js` | **重构为统一三层管线**：resolveTarget/route/spawnWorker/teardown/parseResult 各一份，四个源共用；不再为工单新建顶层会话（旧路径仅 `singleSession.enabled=false` 回退） |
-| `lib/orchestrator.js`（新） | 路由 mandate 组装、父会话判定解析（accept/attach/stop/ignore+preset）、超时回退 rules |
+| `lib/orchestrator.js`（新） | 路由 mandate 组装、目标会话判定解析（accept/attach/stop/ignore+preset）、超时回退 rules |
+| `lib/assessment.js`（新） | 按源研判：QQ 用 `ctx.llm` 严格 JSON、批处理、超时；其它源直通 accept；失败回退 accept + lastError |
 | worker preset（cordis.patch.yml） | 加回 subagent 派生工具（第三层），其余精简不变 |
 | `lib/single-session.js` | 暴露「取该工作空间接单会话的 live agent」给 executor（resolve agent + ensure 会话） |
 | `lib/panel.js` | `/status` 支持 `?sessionId=` 过滤该工作空间工单；tickets 增加 `mode: 'team'|'worker'` |
@@ -152,12 +156,14 @@
 - 单会话只在**有工单要路由/执行**时才被唤醒（orchestrator 那条 mandate），平时是普通会话。
 - `gap/落后/限流` 由监听器自己记 `lastError` 并退避，不拖垮其它源。
 
-### 2.10 监管者（Eval Assessment）：本期只留接口
+### 2.10 监管者（Eval Assessment）：按源开启，QQ 用模型
 
-- 新增 `lib/assessment.js`：导出 `assess(ticket, context) -> {verdict: 'accept'|'ignore'|'stop', reason, preset?}` 的**接口 + 默认实现**（默认 `accept`，即不做研判）。
-- 管线在 Gate 之后、orchestrator 之前调用它；默认实现等价于现状，**零额外模型调用**。
-- 以后要接模型研判，只替换这个实现，不动管线；配置位 `assessment: 'off'|'agent'`（本期只实现 off）。
-- 这就是你说的「先留接口，做不做以后再说」。
+- 新增 `lib/assessment.js`：`assess(ticket, context) -> {verdict:'accept'|'ignore'|'stop', reason, preset?}`，**按源选实现**。
+- **QQ = 模型研判**（默认 `'agent'`）：QQ 消息五花八门、无结构，先让模型判断「这是不是真任务 / 闲聊 / 停止」，再决定是否派工。用宿主 `ctx.llm` 的模型调用（不新起会话、不养常驻 agent），要求**严格 JSON** 输出；实现里用批处理（同一轮多条 QQ 消息一次判）+ 超时。
+- **GitHub / 飞书 = 规则**（`'off'`）：标签/白名单已足够，零模型调用。
+- 失败兜底：研判超时/报错/格式错 → **回退 accept**（宁可派错也别丢活），记 `lastError` 并在面板可见；连续失败给 QQ 源打退避。
+- 配置：`sources.qq.assessment: 'agent'|'off'`、`sources.github.assessment`/`sources.feishu.assessment` 默认 `'off'`；`assessment.model` 可选（不填用宿主默认）。
+- 成本：只有 QQ 且只在新消息批次上调用；面板显示「研判次数/忽略数」，超预算可在控制台关掉。
 
 ## 3 里程碑
 
@@ -186,7 +192,8 @@
 | E12.10 | orchestrator 超时/拒答/格式错 → 回退 rules 且不静默（记 lastError）；ignore/stop 不 spawn worker |
 | E12.11 | **三源同管线**：GitHub/飞书/QQ 的工单都进「工单所属工作空间的单会话」；单会话自己不算监听器；新增一个监听器不改执行侧 |
 | E12.12 | **监听器不驻守会话**：只有脚本轮询，没有常驻 agent；目标单会话由 `resolveTarget` 在宿主侧确定 |
-| E12.13 | **监管者接口**：`assessment.js` 默认 `accept` 且**不产生模型调用**；替换实现即可接入研判，管线不改 |
+| E12.13 | **监管者按源**：QQ 默认走模型研判（严格 JSON、批处理、超时）；GitHub/飞书默认 `off` 零调用；研判失败回退 accept 且记 lastError |
+| E12.14 | QQ 研判可用开关关闭（`sources.qq.assessment='off'`）；面板能看到研判次数/忽略数 |
 
 ## 5 风险
 
@@ -199,6 +206,7 @@
 | R34 | worktree 仍每工单一个，磁盘会涨 | 保留现状（可回滚优先）；后续可加清理策略，不在本期 |
 | R35 | 宿主成员菜单可能留「已完成」历史标记（无公开删除接口） | dispose+archive 保证不运行/不在侧栏；任务板做干净主视图；如仍占地方另开子计划，不擅自改宿主 |
 | R36 | orchestrator 用模型路由可能误判/超时/不回报 | 规则 admission 仍作安全闸；超时/拒答回退 rules 并记 lastError；路由 mandate 只给路由事实不给实现计划 |
+| R37 | QQ 研判每批一次模型调用，可能贵/慢/误判 | 只对 QQ、批处理、超时短；失败回退 accept 不丢活；面板可见研判次数，可一键关；连续失败退避 |
 
 ## 6 与已实现部分的关系
 
@@ -216,5 +224,6 @@
 - **D19**（2026-11-24 拍板）：旧顶层 `worker-*` 路径**保留为回退开关**（`singleSession.enabled=false` 时才走），用于对照/排障；不删除。
 - **D20**（2026-11-24 拍板）：**监管者（Eval Assessment）本期只留接口**——`lib/assessment.js` 默认 `accept`、零模型调用；`assessment:'off'|'agent'` 只实现 off，做不做以后再说（§2.10）。
 - **D21**（2026-11-24 拍板）：**监听器=脚本轮询，不做会话驻守**；目标单会话由宿主 `resolveTarget` 确定性决定（§2.9）。
+- **D22**（2026-11-24 用户指示）：**QQ 源启用模型研判**（`sources.qq.assessment='agent'`）——QQ 任务五花八门，需要模型判断；GitHub/飞书仍规则直通、零调用。
 - 已确认口径（2026-11-24）：**很像智能体团队，但不是完全一样**——借鉴表现形式，不复制其开关/组件/任务语义（§1.1）。
-- **2026-11-24 用户拍板 D14–D21，本文件定稿（v2.3）**，按 T1→T4 执行；四路测试按迭代规则跑完再收口。
+- **2026-11-24 用户拍板 D14–D22，本文件定稿（v2.4）**，按 T1→T4 执行；四路测试按迭代规则跑完再收口。

@@ -841,10 +841,11 @@ window.__ModuleLoader__.load({
           inject: () => ({ ctx }),
         }, SessionBoard))
 
-        // 会话输入区（权限右侧）的「超级智能体」胶囊：登记本工作区唯一的单会话。
-        ctx.slots.inject('conversation.input.right', () => ctx.slots.register({
-          name: 'conversation.input.right',
+        // 官方文档建议：简单控件优先放有实际空间的 composer.dock（输入框下方的环境区）。
+        ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({
+          name: 'conversation.composer.dock',
           id: NS,
+          order: 10,
           locale: NS,
           inject: () => ({ ctx }),
         }, SingleSessionPill))

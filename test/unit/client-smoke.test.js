@@ -67,7 +67,7 @@ test('client 模块：注册左栏图标、主面板、右侧页签类型', () =
   assert.equal(board.options.id, 'dsh-superagent-yh')
   assert.equal(typeof board.component, 'function')
 
-  const pill = slots.find((entry) => entry.options.name === 'conversation.input.right')
+  const pill = slots.find((entry) => entry.options.name === 'conversation.composer.dock')
   assert.ok(pill, '缺少输入区超级智能体胶囊')
   assert.equal(pill.options.id, 'dsh-superagent-yh')
 })

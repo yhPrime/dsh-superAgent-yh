@@ -27,9 +27,17 @@ test('pickWorkspace：都没有落默认；默认也没有则 none', () => {
   assert.equal(none.workspace, null)
 })
 
-test('pickWorkspace：清单外的 hint/workspace 一律丢弃', () => {
-  assert.equal(pickWorkspace({ ticket: { workspaceHint: 'D:/nope' }, workspaces }).via, 'none')
+test('pickWorkspace：研判给的清单外 workspace 一律丢弃', () => {
   assert.equal(pickWorkspace({ ticket: {}, assessment: { workspace: { id: 'w-x' } }, workspaces }).via, 'none')
+})
+
+test('pickWorkspace：清单外的 hint 若是路径则直接采用（仓库未注册工作区）', () => {
+  const out = pickWorkspace({ ticket: { workspaceHint: 'D:/unregistered/repo' }, workspaces })
+  assert.equal(out.via, 'hint')
+  assert.equal(out.workspace.path, 'D:/unregistered/repo')
+  assert.equal(out.workspace.synthetic, true)
+  // 非路径形态的 id 不乱当路径
+  assert.equal(pickWorkspace({ ticket: { workspaceHint: 'w-unknown' }, workspaces }).via, 'none')
 })
 
 test('pickSession：优先 intake id，其次同 cwd 的 intake- 会话', () => {

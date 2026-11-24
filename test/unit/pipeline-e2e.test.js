@@ -35,10 +35,10 @@ test('e2e：工单 queued → 研判 → 定位 → 路由 → 子智能体 → 
     sessionController: {
       resolveAgent: async () => ({ agent }),
       list: async () => ({ items: [{ sessionId: 'intake-repo', cwd: 'C:/repo' }] }),
-      archiveSession: async () => { archived += 1 },
       create: async (req) => ({ sessionId: req.sessionId }),
     },
     permissionPresets: { set: () => {} },
+    agents: { get: () => agent },
     tools: { register: () => () => {} },
     workspaceRegistry: { list: () => [{ id: 'w1', path: 'C:/repo' }] },
   }
@@ -60,6 +60,7 @@ test('e2e：工单 queued → 研判 → 定位 → 路由 → 子智能体 → 
     sources: { github: { send: async (thread, text) => { sent.push({ thread, text }) } } },
     assessment, orchestrator, targetResolver,
     getSubagents: () => subagents,
+    archiveSession: async () => { archived += 1 },
   })
 
   const out = await executor.runTicket(ticket.id)
@@ -103,10 +104,10 @@ test('e2e 健壮性：子智能体 dispose 失败不吞结果', async () => {
     sessionController: {
       resolveAgent: async () => ({ agent }),
       list: async () => ({ items: [{ sessionId: 'intake-repo', cwd: 'C:/repo' }] }),
-      archiveSession: async () => { archived += 1 },
       create: async (req) => ({ sessionId: req.sessionId }),
     },
     permissionPresets: { set: () => {} },
+    agents: { get: () => agent },
     tools: { register: () => () => {} },
     workspaceRegistry: { list: () => [{ id: 'w1', path: 'C:/repo' }] },
   }
@@ -117,6 +118,7 @@ test('e2e 健壮性：子智能体 dispose 失败不吞结果', async () => {
     assessment: { assess: async () => ({ verdict: 'accept' }) },
     targetResolver: createTargetResolver({ ctx, config, log, redact }),
     orchestrator: { route: async () => ({ verdict: 'accept' }) },
+    archiveSession: async () => { archived += 1 },
     getSubagents: () => ({
       startActivation: async () => ({
         childId: 'child-10',

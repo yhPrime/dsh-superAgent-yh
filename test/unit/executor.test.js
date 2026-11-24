@@ -44,9 +44,9 @@ function harness({ single = true, assessmentOut = { verdict: 'accept' }, targetO
       prompt: async () => { calls.prompt += 1 },
       wait: async () => ({ reason: 'idle', output: { records: [] } }),
       cancel: () => {},
-      archiveSession: async (id) => { calls.archive += 1; t.archived = id },
     },
     permissionPresets: { set: () => {} },
+    agents: { get: () => agent },
     tools: { register: () => () => {} },
   }
   const subagents = {
@@ -69,6 +69,7 @@ function harness({ single = true, assessmentOut = { verdict: 'accept' }, targetO
     targetResolver: { resolve: async () => targetOut },
     orchestrator: { route: async () => routeOut },
     getSubagents: () => subagents,
+    archiveSession: async (id) => { calls.archive += 1; t.archived = id },
   })
   return { executor, store, ticket: t, calls, config }
 }

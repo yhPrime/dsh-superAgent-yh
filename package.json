@@ -1,22 +1,33 @@
 {
   "name": "dsh-superagent-yh",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "description": "dsh-superAgent-yh 自制版：每个工单在独立会话与独立目录执行，主线只收三条短消息。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
+    "./client": "./client.js",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ]
     }
   },
   "files": [
     "lib",
+    "client.js",
     "cordis.patch.yml",
     "locale/*.json",
     "docs",

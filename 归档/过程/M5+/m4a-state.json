@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "createdAt": 1795449057259,
+  "updatedAt": 1795449259362,
+  "watermark": {
+    "github": "2026-11-23T15:54:19.349Z"
+  },
+  "tickets": {
+    "github:issue-1": {
+      "id": "github:issue-1",
+      "source": "github",
+      "kind": "issue",
+      "thread": "issue-1",
+      "actor": "tester",
+      "title": "创建 hello.txt",
+      "body": "在仓库根目录创建 hello.txt，内容一行：M1-OK\n完成后调用 ticket_report 工具：status=done，summary=已创建 hello.txt。",
+      "url": "https://github.com/test/repo/issues/1",
+      "at": "2026-11-23T15:50:53.419Z",
+      "status": "queued",
+      "createdAt": 1795449058788,
+      "updatedAt": 1795449058788,
+      "sessionId": null,
+      "workdir": null,
+      "branch": null,
+      "attempts": 0,
+      "lastError": null,
+      "report": null,
+      "relayed": {},
+      "dryRun": true
+    },
+    "github:issue-2": {
+      "id": "github:issue-2",
+      "source": "github",
+      "kind": "issue",
+      "thread": "issue-2",
+      "actor": "tester",
+      "title": "需要人确认的工单",
+      "body": "先不要改任何文件。\n直接调用 ticket_report：status=waiting，question=需要人确认是否创建 second.txt。",
+      "url": "https://github.com/test/repo/issues/2",
+      "at": "2026-11-23T15:50:53.419Z",
+      "status": "queued",
+      "createdAt": 1795449058790,
+      "updatedAt": 1795449058790,
+      "sessionId": null,
+      "workdir": null,
+      "branch": null,
+      "attempts": 0,
+      "lastError": null,
+      "report": null,
+      "relayed": {},
+      "dryRun": true
+    }
+  },
+  "sourceStatus": {
+    "github": {
+      "ok": true,
+      "at": 1795449259362,
+      "added": 0,
+      "watermark": "2026-11-23T15:54:19.349Z"
+    }
+  },
+  "lastError": null
+}

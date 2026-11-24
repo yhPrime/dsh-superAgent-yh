@@ -46,11 +46,13 @@
 
 ## 4 验收
 
-1. 打开 `http://<宿主地址>/dsh-superagent-yh`，应看到面板；
-2. 在源里造一条符合条件的事件，等一个轮询周期，面板应出现 `queued` 工单（dryRun 下不会真跑）；
-3. 把 `dryRun` 改 false、`mainSessionId` 填一个已存在的会话（或留空只看面板）；
-4. 再触发一次：面板出现 `running`，worker 会话 `worker-<id>` 出现，worktree 在 `<stateDir>/work/<id>`；
-5. 完成后 `done`，主线收到「开工/完成」两条消息（需要人时多一条）。
+1. 重启一次 DSH（客户端模块需要重启加载）；左侧栏应出现 **Superagent** 图标，点击打开主面板；右侧栏（若装 better-sidebar）有同名页签；
+2. 主面板/右页签都能关闭：主面板右上「关闭」返回会话，右页签有原生关闭与体内「关闭」；
+3. 在源里造一条符合条件的事件，等一个轮询周期，控制台应出现 `queued` 工单（dryRun 下不会真跑）；
+4. 把 `dryRun` 改 false、`mainSessionId` 填一个已存在的会话（或留空只看控制台）；
+5. 再触发一次：控制台出现 `running`，worker 会话 `worker-<id>` 出现，worktree 在 `<stateDir>/work/<id>`；
+6. 完成后 `done`，主线收到「开工/完成」两条消息（需要人时多一条）；
+7. 失败工单可点「重试」，进行中可「取消」，有会话的可「会话」打开，任何工单可看「日志」。
 
 ## 5 排查
 

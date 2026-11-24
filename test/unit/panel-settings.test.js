@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { mergeSettings, configView } from '../../lib/panel.js'
+import { mergeSettings, configView, originAllowed } from '../../lib/panel.js'
 import { normalizeConfig, ConfigError } from '../../lib/config.js'
 
 const VERSION = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version
@@ -92,6 +92,21 @@ test('configView 暴露 singleSession 配置', () => {
   const view = configView(normalizeConfig({ singleSession: { enabled: true, idleMinutes: 12 } }))
   assert.equal(view.singleSession.enabled, true)
   assert.equal(view.singleSession.idleMinutes, 12)
+})
+
+test('origin：同源/回环放行，跨源拒绝（含桌面代理端口不一致）', () => {
+  const req = (origin, remote = '127.0.0.1') => ({ headers: { origin }, socket: { remoteAddress: remote } })
+  const expected = 'http://127.0.0.1:50290'
+  assert.equal(originAllowed(req('http://127.0.0.1:50290'), expected), true)
+  // 桌面版前面套了本地代理：页面端口与 webServer 端口不同
+  assert.equal(originAllowed(req('http://127.0.0.1:58299'), expected), true)
+  assert.equal(originAllowed(req('http://localhost:58299'), expected), true)
+  assert.equal(originAllowed(req('https://evil.example'), expected), false)
+  assert.equal(originAllowed(req('http://192.168.1.5:58299'), expected), false)
+  assert.equal(originAllowed(req(''), expected), false)
+  assert.equal(originAllowed(req('null'), expected), true)
+  assert.equal(originAllowed(req('null', '8.8.8.8'), expected), false)
+  assert.equal(originAllowed(req('http://127.0.0.1:1', '8.8.8.8'), expected), false)
 })
 
 test('configView 不回明文 token，只给 hasToken', () => {

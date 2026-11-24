@@ -276,7 +276,7 @@ window.__ModuleLoader__.load({
       const [busySession, setBusySession] = React.useState('')
 
       React.useEffect(() => {
-        if (data?.config && form === null) setForm(buildForm(data.config, data.singleSession))
+        if (data?.config && form === null) setForm(buildForm(data.config, data.config.singleSession))
       }, [data, form])
 
       const setField = (path, value) => {
@@ -300,6 +300,7 @@ window.__ModuleLoader__.load({
           if (okMessage) setMsg(okMessage)
           await reload()
         } catch (reason) {
+          setMsg('')
           setError(String(reason?.message || reason))
         }
       }

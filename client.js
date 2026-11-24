@@ -45,6 +45,7 @@ window.__ModuleLoader__.load({
         stateOk: '正常', stateFail: '异常', watermark: '水位', added: '本轮新增',
         confirmCompact: '压缩可能消耗一次模型调用，确定现在压缩？',
         boardTitle: 'Superagent 工单', boardRunning: '进行中 {count}', boardPending: '待处理 {count}', boardTotal: '共 {count}',
+        capsule: '单会话', capsuleOn: '单会话已开：各工作区的接单会话已顶置', capsuleOff: '单会话已关：已取消顶置',
       },
       en: {
         title: 'Superagent console',
@@ -80,6 +81,7 @@ window.__ModuleLoader__.load({
         stateOk: 'OK', stateFail: 'Error', watermark: 'Watermark', added: 'Added',
         confirmCompact: 'Compacting may cost one model call. Compact now?',
         boardTitle: 'Superagent tickets', boardRunning: '{count} running', boardPending: '{count} queued', boardTotal: '{count} total',
+        capsule: 'Single session', capsuleOn: 'Single session on: intake sessions pinned to the top', capsuleOff: 'Single session off: pins removed',
       },
     }
 
@@ -240,6 +242,14 @@ window.__ModuleLoader__.load({
 .syh-search{width:100%;padding:6px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:7px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;margin-bottom:10px}
 .syh-savebar{position:sticky;bottom:0;display:flex;align-items:center;gap:8px;background:var(--dsw-alias-bg-base);padding:10px 0 2px;margin-top:4px}
 .syh-empty{padding:18px;text-align:center;color:var(--dsw-alias-label-secondary);font-size:12px}
+.syh-capsule{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);border-radius:999px;padding:3px 10px 3px 12px;font-size:12px;cursor:pointer;user-select:none;color:var(--dsw-alias-label-secondary)}
+.syh-capsule input{position:absolute;opacity:0;width:0;height:0}
+.syh-capsule i{position:relative;width:26px;height:14px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);display:inline-block;transition:background .15s}
+.syh-capsule i::after{content:'';position:absolute;top:2px;left:2px;width:10px;height:10px;border-radius:50%;background:var(--dsw-alias-label-secondary);transition:transform .15s,background .15s}
+.syh-capsule input:checked ~ i{background:var(--dsw-alias-brand-primary)}
+.syh-capsule input:checked ~ i::after{transform:translateX(12px);background:#fff}
+.syh-capsule input:checked ~ span{color:var(--dsw-alias-brand-primary)}
+.syh-capsule:has(input:checked){border-color:var(--dsw-alias-brand-primary)}
 `
 
     function Badge({ status, t }) {
@@ -341,6 +351,21 @@ window.__ModuleLoader__.load({
       const [filter, setFilter] = React.useState('all')
       const [query, setQuery] = React.useState('')
       const [busySession, setBusySession] = React.useState('')
+      const [singleBusy, setSingleBusy] = React.useState(false)
+
+      const toggleSingle = async (next) => {
+        setSingleBusy(true)
+        setError('')
+        try {
+          await post('/settings', { singleSession: { enabled: next } })
+          setMsg(next ? t('capsuleOn') : t('capsuleOff'))
+          await reload()
+        } catch (reason) {
+          setError(String(reason?.message || reason))
+        } finally {
+          setSingleBusy(false)
+        }
+      }
 
       React.useEffect(() => {
         if (data?.config && form === null) setForm(buildForm(data.config, data.config.singleSession))
@@ -424,6 +449,16 @@ window.__ModuleLoader__.load({
         h('span', { className: 'syh-live' },
           h('i', { className: `syh-dot ${data?.dryRun ? 'dry' : ''}` }),
           `v${data?.config?.version || '?'} · ${data?.dryRun ? 'dryRun' : 'live'}`,
+        ),
+        h('label', { className: 'syh-capsule', title: t('singleHint') },
+          h('input', {
+            type: 'checkbox',
+            checked: data?.singleSession?.enabled === true,
+            disabled: singleBusy,
+            onChange: (event) => toggleSingle(event.target.checked),
+          }),
+          h('span', null, t('capsule')),
+          h('i', null),
         ),
         h('button', { className: 'syh-btn', onClick: () => reload() }, t('refresh')),
         compact

@@ -51,7 +51,7 @@ test('配置校验：singleSession 非法值 fail-closed', () => {
 })
 
 function harness({ single = {}, sessions = [], workspaces = [{ id: 'w1', path: 'C:/repo' }], pressure = { pressureTokens: 100, contextWindow: 1000 }, state = { running: false, queue: [], pendingInput: [], cursor: 7 } } = {}) {
-  const calls = { compact: 0, region: 0, created: [] }
+  const calls = { compact: 0, region: 0, created: [], pin: 0, unpin: 0 }
   const store = { state: { singleSession: {}, lastError: null }, save() {} }
   const config = normalizeConfig({ singleSession: { enabled: true, ...single } })
   const agent = { id: 'x', session: {} }
@@ -73,6 +73,8 @@ function harness({ single = {}, sessions = [], workspaces = [{ id: 'w1', path: '
         compactRegion: async () => { calls.region += 1; return { ok: true } },
       }),
       createSession: async (request) => { calls.created.push(request); return { sessionId: request.sessionId } },
+      pinSession: async () => { calls.pin += 1 },
+      unpinSession: async () => { calls.unpin += 1 },
       resolveAgent: async () => ({ agent }),
     },
   })
@@ -191,6 +193,20 @@ test('手动压缩：运行中拒绝（code=busy）；未知会话 not-found', a
   const out = await idle.maintainer.compactManual(id)
   assert.equal(out.reason, 'manual')
   assert.equal(idle.calls.compact, 1)
+})
+
+test('单会话：开启时顶置（pin），关闭时取消顶置（unpin）', async () => {
+  const id = intakeIdOf('intake', 'C:/repo', 'w1')
+  const on = harness({ sessions: [{ sessionId: id, cwd: 'C:/repo' }] })
+  await on.maintainer.maintain()
+  assert.equal(on.calls.pin, 1)
+  assert.deepEqual(on.store.state.singleSessionPins, [id])
+
+  const off = harness({ single: { enabled: false } })
+  off.store.state.singleSessionPins = [id]
+  await off.maintainer.maintain()
+  assert.equal(off.calls.unpin, 1)
+  assert.deepEqual(off.store.state.singleSessionPins, [])
 })
 
 test('开关关闭：maintain/snapshot 都不碰会话', async () => {

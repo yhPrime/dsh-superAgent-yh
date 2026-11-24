@@ -146,6 +146,21 @@ test('stateOf：未登记 / 已被别的会话占用', async () => {
   assert.equal(own.workspaceOccupied, false)
 })
 
+test('purgeLegacy：归档所有 intake-* 会话；已登记的先注销', async () => {
+  const h = harness({ sessions: [
+    { sessionId: 'intake-a', workspaceId: 'w1' },
+    { sessionId: 'intake-b', workspaceId: 'w1' },
+    { sessionId: 'session-normal', workspaceId: 'w1' },
+  ] })
+  h.store.state.singleSessions.w1 = 'intake-a'
+  const out = await h.maintainer.purgeLegacy()
+  assert.equal(out.total, 2)
+  assert.equal(out.archived, 2)
+  assert.equal(h.calls.archive, 2)
+  assert.equal(h.calls.unpin, 1, '已登记的那个要先注销（含 unpin）')
+  assert.equal(h.store.state.singleSessions.w1, undefined)
+})
+
 test('开关关闭：maintain / snapshot / list 都是空', async () => {
   const off = harness({ enabled: false })
   assert.equal((await off.maintainer.maintain()).enabled, false)

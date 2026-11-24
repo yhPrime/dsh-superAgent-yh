@@ -836,7 +836,7 @@ window.__ModuleLoader__.load({
         // 会话内任务板：挂在会话头 subagent 区（和智能体团队同区，组件独立）。
         ctx.slots.inject('conversation.session.header.actions.subagent.footer', () => ctx.slots.register({
           name: 'conversation.session.header.actions.subagent.footer',
-          key: NS,
+          id: NS,
           locale: NS,
           inject: () => ({ ctx }),
         }, SessionBoard))
@@ -844,12 +844,13 @@ window.__ModuleLoader__.load({
         // 会话输入区（权限右侧）的「超级智能体」胶囊：登记本工作区唯一的单会话。
         ctx.slots.inject('conversation.input.right', () => ctx.slots.register({
           name: 'conversation.input.right',
-          key: NS,
+          id: NS,
           locale: NS,
           inject: () => ({ ctx }),
         }, SingleSessionPill))
 
-        ctx.inject(['sidebarRightTabs', 'sidebarRight'], (child) => {          const tabs = child.get('sidebarRightTabs') ?? child.sidebarRightTabs
+        ctx.inject(['sidebarRightTabs', 'sidebarRight'], (child) => {
+          const tabs = child.get('sidebarRightTabs') ?? child.sidebarRightTabs
           services.right = child.get('sidebarRight') ?? child.sidebarRight ?? null
           if (!tabs || typeof tabs.register !== 'function') return
           child.effect(() => tabs.register({

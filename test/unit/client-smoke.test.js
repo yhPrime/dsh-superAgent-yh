@@ -64,8 +64,12 @@ test('client 模块：注册左栏图标、主面板、右侧页签类型', () =
 
   const board = slots.find((entry) => entry.options.name === 'conversation.session.header.actions.subagent.footer')
   assert.ok(board, '缺少会话内任务板')
-  assert.equal(board.options.key, 'dsh-superagent-yh')
+  assert.equal(board.options.id, 'dsh-superagent-yh')
   assert.equal(typeof board.component, 'function')
+
+  const pill = slots.find((entry) => entry.options.name === 'conversation.input.right')
+  assert.ok(pill, '缺少输入区超级智能体胶囊')
+  assert.equal(pill.options.id, 'dsh-superagent-yh')
 })
 
 test('client 模块：没有 better-sidebar 时不注册右栏，也不抛错', () => {

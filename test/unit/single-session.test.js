@@ -28,7 +28,7 @@ test('regionEndOf：保留最近 N 轮', () => {
   assert.equal(regionEndOf(records, 4), null)
 })
 
-function harness({ enabled = true, sessions = [{ sessionId: 's1', workspaceId: 'w1', cwd: 'C:/repo' }], workspaces = [{ id: 'w1', path: 'C:/repo', title: 'repo' }], state = { running: false, queue: [], pendingInput: [], cursor: 7 }, pressure = { pressureTokens: 100, contextWindow: 1000 } } = {}) {
+function harness({ enabled = true, sessions = [{ sessionId: 's1', workspaceId: 'w1', cwd: 'C:/repo' }], workspaces = [{ id: 'w1', path: 'C:/repo', title: 'repo' }], state = { running: false, queue: [], pendingInput: [], cursor: 7 }, pressure = { pressureTokens: 100, contextWindow: 1000 }, blank = true, selectError = null } = {}) {
   const calls = { pin: 0, unpin: 0, archive: 0, compact: 0, selected: [] }
   const store = { state: { singleSessions: {}, singleSession: {}, lastError: null }, save() {} }
   const config = normalizeConfig({ singleSession: { enabled, idleMinutes: 30, pressureRatio: 0.5 } })
@@ -49,7 +49,11 @@ function harness({ enabled = true, sessions = [{ sessionId: 's1', workspaceId: '
       resolveByPath: async () => workspaces[0],
       resolveAgent: async () => ({ agent }),
       presetOf: () => 'standard',
-      selectPreset: async (_a, preset) => { calls.selected.push(preset) },
+      isBlank: () => blank,
+      selectPreset: async (_a, preset) => {
+        if (selectError) throw new Error(selectError)
+        calls.selected.push(preset)
+      },
     },
   })
   return { maintainer, store, calls, config }
@@ -105,6 +109,20 @@ test('register：切到调度者 preset 并记住原 preset；解除时切回', 
   await h.maintainer.unregister('s1')
   assert.deepEqual(h.calls.selected, ['dsh-superagent-yh-orchestrator', 'standard'])
   assert.equal(h.store.state.singleSessionPrevPreset.w1, undefined)
+})
+
+test('register：已开始的会话拒绝登记（宿主不允许中途切 preset）', async () => {
+  const h = harness({ blank: false })
+  await assert.rejects(() => h.maintainer.register('s1'), (e) => e.code === 'started')
+  assert.equal(h.store.state.singleSessions.w1, undefined)
+  assert.equal(h.calls.pin, 0)
+})
+
+test('register：preset 切不上就撤销登记并报错', async () => {
+  const h = harness({ selectError: 'This session has already started' })
+  await assert.rejects(() => h.maintainer.register('s1'), (e) => e.code === 'preset-failed')
+  assert.equal(h.store.state.singleSessions.w1, undefined)
+  assert.equal(h.calls.unpin, 1)
 })
 
 test('list / snapshot：只列已登记的工作区', async () => {

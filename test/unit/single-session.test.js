@@ -29,7 +29,7 @@ test('regionEndOf：保留最近 N 轮', () => {
 })
 
 function harness({ enabled = true, sessions = [{ sessionId: 's1', workspaceId: 'w1', cwd: 'C:/repo' }], workspaces = [{ id: 'w1', path: 'C:/repo', title: 'repo' }], state = { running: false, queue: [], pendingInput: [], cursor: 7 }, pressure = { pressureTokens: 100, contextWindow: 1000 } } = {}) {
-  const calls = { pin: 0, unpin: 0, archive: 0, compact: 0 }
+  const calls = { pin: 0, unpin: 0, archive: 0, compact: 0, selected: [] }
   const store = { state: { singleSessions: {}, singleSession: {}, lastError: null }, save() {} }
   const config = normalizeConfig({ singleSession: { enabled, idleMinutes: 30, pressureRatio: 0.5 } })
   const agent = { session: {} }
@@ -48,6 +48,8 @@ function harness({ enabled = true, sessions = [{ sessionId: 's1', workspaceId: '
       archiveSession: async () => { calls.archive += 1 },
       resolveByPath: async () => workspaces[0],
       resolveAgent: async () => ({ agent }),
+      presetOf: () => 'standard',
+      selectPreset: async (_a, preset) => { calls.selected.push(preset) },
     },
   })
   return { maintainer, store, calls, config }
@@ -92,6 +94,17 @@ test('unregister：撤销登记 + unpin；removeSingle：先注销再归档', as
   assert.equal(removed.workspaceId, 'w1')
   assert.equal(h.store.state.singleSessions.w1, undefined)
   assert.equal(h.calls.archive, 1)
+})
+
+test('register：切到调度者 preset 并记住原 preset；解除时切回', async () => {
+  const h = harness()
+  await h.maintainer.register('s1')
+  assert.deepEqual(h.calls.selected, ['dsh-superagent-yh-orchestrator'])
+  assert.equal(h.store.state.singleSessionPrevPreset.w1, 'standard')
+
+  await h.maintainer.unregister('s1')
+  assert.deepEqual(h.calls.selected, ['dsh-superagent-yh-orchestrator', 'standard'])
+  assert.equal(h.store.state.singleSessionPrevPreset.w1, undefined)
 })
 
 test('list / snapshot：只列已登记的工作区', async () => {

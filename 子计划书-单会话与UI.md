@@ -32,27 +32,29 @@
 
 ## 2 方案
 
-### 2.1 源只是「监听器」，产出后走同一套流程
+### 2.1 三个外部源是「监听器」，单会话是「目的地」
 
-四个源（GitHub / 飞书 / QQ / 内部会话）**只负责监听和规范化 Trigger**，不含任何执行逻辑。监听之后全部汇入**同一条管线**，目标都是「**该工单所属工作空间的那个单会话**」：
+**三个外部源**（GitHub / 飞书 / QQ）只负责监听外部平台并规范化 Trigger，不含任何执行逻辑；监听之后全部汇入**同一条管线**，目标是「**该工单所属工作空间的那个单会话**」。
 
-| | 三个外部源 | 内部单会话 |
+**单会话不是监听器**：它就是目的地，也是 orchestrator 所在。你在里面说话 = 直接跟 orchestrator 交互（它可以当场派 worker），不经过"源"。
+
+| | 三个外部源 | 单会话 |
 |---|---|---|
-| 角色 | 监听器（poll 外部平台） | 监听器（读会话消息） |
-| 产出 | Trigger → 工单 | Trigger → 工单 |
-| 目标单会话 | 按工单所属工作空间（`repoPath` / 源配置映射）找到该工作空间的单会话 | 就是这个会话本身 |
-| 之后 | 同一套 orchestrator→worker(subagent)→subagent | 同一套 |
+| 角色 | 监听器（poll 外部平台） | 目的地 + orchestrator 驻地 |
+| 产出 | Trigger → 工单 | 不是源，不产生"监听事件" |
+| 之后 | 同一套 orchestrator→worker(subagent)→subagent | 由它的 agent 承担路由与派工 |
 
 - **不会再为工单新建顶层 `worker-*` 会话**（单会话模式开启时）；worker 是目标单会话里的子智能体。
 - `singleSession.enabled=false` 仅是**回退开关**（旧顶层 worker 路径），用于对照/排障，不是常规路径。
 - 每个工作空间有且只有一个单会话；不同工作空间的工单进各自的单会话，互不串。
+- 「会话源（`sources.session`）」这个想法**作废**：会话是目的地，不需要再把自己监听起来当任务源（见 `子计划书-会话版.md` 状态）。
 
 ### 2.2 统一执行管线（一套代码，全部源复用）
 
-**不写两条分支。** 把 `lib/executor.js` 重构成**一条**三层管线，GitHub/飞书/QQ/会话源产出的工单全部走它：
+**不写两条分支。** 把 `lib/executor.js` 重构成**一条**三层管线，GitHub/飞书/QQ 的工单全部走它（单会话自己的对话直接由 agent 处理，不进这条管线）：
 
 ```
-任意监听器 → ticket(queued)                  [admission/限流/幂等 共用]
+外部监听器 → ticket(queued)                  [admission/限流/幂等 共用]
 → resolveTarget(ticket)                      [共用：按工作空间找到那个单会话]
 → orchestrator.route(ticket, target)         [共用：目标会话 agent 判定或 rules 回退]
 → ensureWorktree(ticket)                     [共用：每工单独立目录]
@@ -63,12 +65,12 @@
 ```
 
 - 唯一驻留方式：worker = 目标单会话的**子智能体**（不再有顶层 `worker-*` 分支；旧路径仅 `singleSession.enabled=false` 回退）。
-- `route/spawnWorker/teardown/parseResult/resolveTarget` 各只写一份，四个源共用。
+- `route/spawnWorker/teardown/parseResult/resolveTarget` 各只写一份，三个源共用。
 - 串行 `maxWorkers:1`、取消、超时、脱敏、日志：共用，不因源而分叉。
 - 第三层（worker 派 subagent）：worker preset 加回工具。
 - 符合「源只监听、执行只一套」：加新源 = 只加一个监听器，执行侧零改动。
 
-**resolveTarget 口径**：工单携带 `workspaceHint`——GitHub 用 `repoPath` 所在工作空间；飞书/QQ 用该源配置的 `workspace`（缺省=插件默认工作空间）；会话源=消息所在会话的工作空间。找不到对应单会话 → 该工单 failed 并写明原因（不静默、不猜）。
+**resolveTarget 口径**：工单携带 `workspaceHint`——GitHub 用 `repoPath` 所在工作空间；飞书/QQ 用该源配置的 `workspace`（缺省=插件默认工作空间）。找不到对应单会话 → 该工单 failed 并写明原因（不静默、不猜）。
 
 ### 2.3 回报
 
@@ -165,7 +167,7 @@
 | E12.8 | **完工即卸载**：终态后子智能体被 dispose+archive，不再运行、不在侧栏；任务板不无限堆积（保留窗口生效） |
 | E12.9 | **三层角色齐备**：orchestrator（父会话路由）→ worker（子智能体）→ subagent（worker 可再派生）；`orchestrator:'agent'` 时路由由父会话判定，'rules' 时走规则 |
 | E12.10 | orchestrator 超时/拒答/格式错 → 回退 rules 且不静默（记 lastError）；ignore/stop 不 spawn worker |
-| E12.11 | **四源同管线**：GitHub/飞书/QQ/会话源的工单都进「工单所属工作空间的单会话」；新增一个监听器不改执行侧 |
+| E12.11 | **三源同管线**：GitHub/飞书/QQ 的工单都进「工单所属工作空间的单会话」；单会话自己不算监听器；新增一个监听器不改执行侧 |
 
 ## 5 风险
 
@@ -190,6 +192,7 @@
 - **D14**：单会话开启时，工单改为**会话内子智能体**执行（推荐）；关闭时保持顶层 worker 会话。
 - **D15**：任务板放在会话内 subagent 区（`conversation.session.header.actions.subagent.footer`），用**自己的** `SuperagentBoard` 组件（像团队、不照搬）。若想要别的位置，先说，我改 §2.4。
 - **D16**（2026-11-24 追加）：**完工即卸载**——终态后 `dispose()` + `archiveSession(childId)`，任务板保留窗口默认最近 20 条。宿主成员菜单若留历史标记属宿主边界（R35），不擅自改。
-- **D17**（2026-11-24 追加，恢复原版）：**三层角色** orchestrator/worker/subagent 为核心；**源只是监听器**，四个源监听后全部汇入同一管线，目标是「工单所属工作空间的那个单会话」；orchestrator 由该单会话 agent 承担（`orchestrator:'agent'|'rules'`，默认 'agent'），worker preset 加回 subagent 派生工具。
+- **D17**（2026-11-24 追加，恢复原版）：**三层角色** orchestrator/worker/subagent 为核心；**只有三个外部源是监听器**，监听后全部汇入同一管线，目标是「工单所属工作空间的那个单会话」；**单会话是目的地/orchestrator 驻地，不是源**；orchestrator 由该单会话 agent 承担（`orchestrator:'agent'|'rules'`，默认 'agent'），worker preset 加回 subagent 派生工具。
+- **D18**（2026-11-24）：`子计划书-会话版.md`（`sources.session`）**作废**——会话是目的地，不需要把自己当任务源监听。
 - 已确认口径（2026-11-24）：**很像智能体团队，但不是完全一样**——借鉴表现形式，不复制其开关/组件/任务语义（§1.1）。
 - **2026-11-24 用户拍板 D14/D15/D16（v2.2 曾定稿）；v2.3 因恢复三层角色改回未定稿，D17 待拍板。** 拍板后改回定稿（v2.3）再执行。

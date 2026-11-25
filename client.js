@@ -30,6 +30,7 @@ window.__ModuleLoader__.load({
         settings: '设置', basic: '基础', dryRun: 'dryRun（只记录不干活）', mainSession: '主线会话 ID',
         poll: '轮询间隔(ms)', preset: 'worker preset', repoPath: '本地 git 仓库路径（worker worktree 源）',
         save: '保存', saving: '保存中…', saved: '已保存（插件会重载）', unsaved: '有未保存的修改',
+        unsavedConfirm: '有未保存的修改，确定离开？',
         github: 'GitHub', feishu: '飞书', qq: 'QQ', enabled: '启用', repo: '仓库 owner/name',
         labels: '触发标签（逗号分隔）', authors: '作者白名单（逗号分隔）', token: 'Token（留空保持）',
         tokenSet: '已配置，留空保持不变', tokenUnset: '未配置', apiBase: 'API 地址', confirmWrites: '允许回写',
@@ -72,6 +73,7 @@ window.__ModuleLoader__.load({
         settings: 'Settings', basic: 'Basics', dryRun: 'dryRun (record only)', mainSession: 'Main session id',
         poll: 'Poll interval (ms)', preset: 'worker preset', repoPath: 'Local git repo path (worktree source)',
         save: 'Save', saving: 'Saving…', saved: 'Saved (plugin reloads)', unsaved: 'Unsaved changes',
+        unsavedConfirm: 'You have unsaved changes. Leave anyway?',
         github: 'GitHub', feishu: 'Feishu', qq: 'QQ', enabled: 'Enabled', repo: 'Repository owner/name',
         labels: 'Trigger labels (comma separated)', authors: 'Author allowlist (comma separated)', token: 'Token (blank keeps current)',
         tokenSet: 'Configured; blank keeps it', tokenUnset: 'Not set', apiBase: 'API base', confirmWrites: 'Allow write-back',
@@ -339,11 +341,18 @@ window.__ModuleLoader__.load({
       }
     }
 
+    // dirty 判据（S4）：表单与打开设置页时的基线逐字段深比较；null 表示还没加载/刚保存。
+    function isFormDirty(form, baseline) {
+      if (!form || !baseline) return false
+      return JSON.stringify(form) !== JSON.stringify(baseline)
+    }
+
     const CSS = `
-.syh-root{height:100%;overflow:auto;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:14px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+.syh-root{height:100%;overflow:auto;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:14px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;container-type:inline-size}
+.syh-root,.syh-root *{box-sizing:border-box}
 .syh-wrap{padding:20px 24px;max-width:1100px}
 .syh-compact{padding:12px 14px}
-.syh-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
+.syh-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;flex-wrap:wrap}
 .syh-head h1{font-size:18px;margin:0;font-weight:600}
 .syh-sub{color:var(--dsw-alias-label-secondary);font-size:12px;margin-top:2px}
 .syh-grow{flex:1}
@@ -367,7 +376,8 @@ window.__ModuleLoader__.load({
 .syh-card h2{font-size:14px;margin:0 0 10px;font-weight:600;display:flex;align-items:center;gap:8px}
 .syh-table{width:100%;border-collapse:collapse;font-size:12px}
 .syh-table th{text-align:left;color:var(--dsw-alias-label-secondary);font-weight:500;padding:5px 7px;border-bottom:1px solid var(--dsw-alias-border-l1)}
-.syh-table td{padding:7px;border-bottom:1px solid var(--dsw-alias-border-l1);vertical-align:top}
+.syh-table td{padding:7px;border-bottom:1px solid var(--dsw-alias-border-l1);vertical-align:top;overflow-wrap:anywhere}
+.syh-table th{overflow-wrap:anywhere}
 .syh-table tr:hover td{background:var(--dsw-alias-bg-layer-2)}
 .syh-badge{display:inline-block;border-radius:999px;padding:0 8px;line-height:19px;font-size:11px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)}
 .syh-queued{color:var(--dsw-alias-state-warn-primary)}.syh-running{color:var(--dsw-alias-brand-primary)}.syh-waiting{color:var(--dsw-alias-state-warn-primary)}.syh-done{color:var(--dsw-alias-state-success-primary)}.syh-failed{color:var(--dsw-alias-state-error-primary)}
@@ -421,6 +431,17 @@ window.__ModuleLoader__.load({
 .syhb-dot.done{background:var(--dsw-alias-state-success-primary)}
 .syhb-dot.failed{background:var(--dsw-alias-state-error-primary)}
 .syhb-subject{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* S4：窄栏降级。按容器宽度（右栏 320/360/380 或主面板）判断，不按视口。 */
+.syh-td-err{display:none;font-size:11px;margin-top:2px}
+.syh-savebar{flex-wrap:wrap}
+@container (max-width:420px){
+  .syh-wrap{padding:12px 10px}
+  .syh-head h1{font-size:16px}
+  .syh-tabs{overflow-x:auto}
+  .syh-th-attempts,.syh-td-attempts,.syh-th-error,.syh-td-error{display:none}
+  .syh-td-err{display:block}
+  .syh-ws{grid-template-columns:1fr}
+}
 `
 
     function Badge({ status, t }) {
@@ -537,10 +558,15 @@ window.__ModuleLoader__.load({
 
     function ErrorBanner({ t, loadError, error }) {
       if (!loadError && !error) return null
-      return h('div', { className: 'syh-card' },
+      return h('div', { className: 'syh-card', role: 'alert' },
         loadError ? h('div', { className: 'syh-err' }, t('loadFailed') + '：' + loadError) : null,
         error ? h('div', { className: 'syh-err' }, error) : null,
       )
+    }
+
+    // S4 空/错态统一：所有空态走同一个组件与同一个类，语义上标 role=status。
+    function EmptyState({ children }) {
+      return h('div', { className: 'syh-empty', role: 'status' }, children)
     }
 
     function TabsBar({ t, tabs, tab, onSelect }) {
@@ -596,9 +622,9 @@ window.__ModuleLoader__.load({
         h('div', { className: 'syh-card' },
           h('h2', null, t('workspace'), h('span', { className: 'syh-muted' }, ` (${data?.singleSession?.workspaces?.length ?? 0})`)),
           !data?.singleSession?.enabled
-            ? h('div', { className: 'syh-empty' }, t('noWorkspace'))
+            ? h(EmptyState, null, t('noWorkspace'))
             : (data.singleSession.workspaces ?? []).length === 0
-              ? h('div', { className: 'syh-empty' }, t('noWorkspace'))
+              ? h(EmptyState, null, t('noWorkspace'))
               : data.singleSession.workspaces.map((workspace) => h('div', { className: 'syh-ws', key: workspace.sessionId || workspace.path },
                   h('div', null,
                     h('div', { className: 'syh-ws-path', title: workspace.path }, workspace.path),
@@ -612,7 +638,7 @@ window.__ModuleLoader__.load({
                       h(PressureBar, { ratio: workspace.ratio || 0 }),
                     ),
                   ),
-                  h('div', { style: { display: 'flex', gap: 6, alignItems: 'center' } },
+                  h('div', { style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' } },
                     h('span', { className: `syh-badge syh-${workspace.running ? 'running' : workspace.status === 'missing' ? 'failed' : 'done'}` }, workspace.running ? t('wsRunning') : (workspace.status || 'idle')),
                     workspace.sessionId ? h('button', { className: 'syh-btn', onClick: () => onOpenSession(workspace.sessionId) }, t('session')) : null,
                     workspace.sessionId ? h('button', { className: 'syh-btn', disabled: busySession === workspace.sessionId, onClick: () => onCompactNow(workspace.sessionId) }, busySession === workspace.sessionId ? t('compacting') : t('compactNow')) : null,
@@ -623,7 +649,7 @@ window.__ModuleLoader__.load({
         h('div', { className: 'syh-card' },
           h('h2', null, t('sourceHealth')),
           enabledSources.length === 0
-            ? h('div', { className: 'syh-empty' }, t('noSources'))
+            ? h(EmptyState, null, t('noSources'))
             : enabledSources.map((key) => {
                 const health = sourceHealth[key] ?? {}
                 return h('div', { key, className: 'syh-ws' },
@@ -639,7 +665,7 @@ window.__ModuleLoader__.load({
         h('div', { className: 'syh-card' },
           h('h2', null, t('recent')),
           tickets.length === 0
-            ? h('div', { className: 'syh-empty' }, t('noTickets'))
+            ? h(EmptyState, null, t('noTickets'))
             : tickets.slice(0, 10).map((ticket) => h('div', { key: ticket.id, className: 'syh-ws' },
                 h('div', null,
                   h('div', { className: 'syh-ws-path', style: { fontSize: 12, fontWeight: 500 } }, ticket.title || ticket.id),
@@ -670,26 +696,28 @@ window.__ModuleLoader__.load({
         h('input', { className: 'syh-search', value: query, placeholder: t('search'), onChange: (event) => onQuery(event.target.value) }),
         h('div', { className: 'syh-card' },
           list.length === 0
-            ? h('div', { className: 'syh-empty' }, query ? t('noMatch') : t('noTickets'))
+            ? h(EmptyState, null, query ? t('noMatch') : t('noTickets'))
             : h('table', { className: 'syh-table' },
                 h('thead', null, h('tr', null,
                   h('th', null, t('tickets')),
                   h('th', null, t('source')),
                   h('th', null, t('status')),
-                  h('th', null, t('attempts')),
-                  h('th', null, t('lastError')),
+                  h('th', { className: 'syh-th-attempts' }, t('attempts')),
+                  h('th', { className: 'syh-th-error' }, t('lastError')),
                   h('th', null, t('actions')),
                 )),
                 h('tbody', null, list.map((ticket) => h('tr', { key: ticket.id },
                   h('td', null,
                     h('code', { style: { fontSize: 11 } }, ticket.id),
                     h('div', { style: { fontSize: 12 } }, ticket.title || ''),
+                    // S4 窄栏：最后错误从单独一列降到第二行（宽栏仍用原列）。
+                    ticket.lastError ? h('div', { className: 'syh-err syh-td-err' }, ticket.lastError) : null,
                     ticket.question ? h('div', { className: 'syh-err', style: { fontSize: 11 } }, '？' + ticket.question) : null,
                   ),
                   h('td', null, h('span', { className: 'syh-muted' }, ticket.source)),
                   h('td', null, h(Badge, { status: ticket.status, t })),
-                  h('td', null, String(ticket.attempts ?? 0)),
-                  h('td', null, ticket.lastError ? h('div', { className: 'syh-err' }, ticket.lastError) : h('span', { className: 'syh-muted' }, '—')),
+                  h('td', { className: 'syh-td-attempts' }, String(ticket.attempts ?? 0)),
+                  h('td', { className: 'syh-td-error' }, ticket.lastError ? h('div', { className: 'syh-err' }, ticket.lastError) : h('span', { className: 'syh-muted' }, '—')),
                   h('td', null,
                     h('div', { style: { display: 'flex', gap: 5, flexWrap: 'wrap' } },
                       ticket.status === 'failed' ? h('button', { className: 'syh-btn', onClick: () => onAct(ticket, 'retry') }, t('retry')) : null,
@@ -721,7 +749,7 @@ window.__ModuleLoader__.load({
         meta,
         h('div', { className: 'syh-card' },
           roles.length === 0
-            ? h('div', { className: 'syh-empty' }, t('noRoles'))
+            ? h(EmptyState, null, t('noRoles'))
             : h('table', { className: 'syh-table' },
                 h('thead', null, h('tr', null,
                   h('th', null, t('roleName')),
@@ -773,7 +801,7 @@ window.__ModuleLoader__.load({
     }
 
     function SourcesView({ t, form, onField, msg, error, onSave }) {
-      if (!form) return h('div', { className: 'syh-empty' }, t('loadFailed'))
+      if (!form) return h(EmptyState, null, t('loadFailed'))
       return h('div', { className: 'syh-card' },
         h('h2', null, t('sourcesTab')),
         h(SourceCard, {
@@ -828,7 +856,7 @@ window.__ModuleLoader__.load({
     }
 
     function SettingsView({ t, form, onField, msg, error, onSave }) {
-      if (!form) return h('div', { className: 'syh-empty' }, t('loadFailed'))
+      if (!form) return h(EmptyState, null, t('loadFailed'))
       const s = form.single
       return h('div', null,
         h('div', { className: 'syh-card' },
@@ -866,6 +894,7 @@ window.__ModuleLoader__.load({
       const { data, error: loadError, reload } = useConsoleResource('status')
       const [tab, setTab] = React.useState('overview')
       const [form, setForm] = React.useState(null)
+      const [baseline, setBaseline] = React.useState(null)
       const [msg, setMsg] = React.useState('')
       const [error, setError] = React.useState('')
       const [log, setLog] = React.useState(null)
@@ -889,8 +918,28 @@ window.__ModuleLoader__.load({
       }
 
       React.useEffect(() => {
-        if (data?.config && form === null) setForm(buildForm(data.config, data.config.singleSession))
+        if (data?.config && form === null) {
+          const next = buildForm(data.config, data.config.singleSession)
+          setForm(next)
+          setBaseline(next)
+        }
       }, [data, form])
+
+      // S4 表单 dirty 保护：切页签或关闭前弹一次确认；保存后 form 归 null，脏标记自动清除。
+      const dirty = isFormDirty(form, baseline)
+      const confirmLeave = () => {
+        if (!dirty) return true
+        if (typeof window === 'undefined' || typeof window.confirm !== 'function') return true
+        return window.confirm(t('unsavedConfirm'))
+      }
+      const selectTab = (next) => {
+        if (next === tab) return
+        if (!confirmLeave()) return
+        setTab(next)
+      }
+      const requestClose = () => {
+        if (confirmLeave()) onClose?.()
+      }
 
       const setField = (path, value) => {
         setForm((current) => {
@@ -981,7 +1030,7 @@ window.__ModuleLoader__.load({
       const sourceHealth = data?.sources ?? {}
       const enabledSources = data?.config?.sources ? Object.entries(data.config.sources).filter(([, value]) => value.enabled).map(([key]) => key) : []
       const visibleTabs = compact ? ['overview', 'tickets'] : TABS
-      const pickStat = (key) => { setFilter(key); setTab('tickets') }
+      const pickStat = (key) => { if (!confirmLeave()) return; setFilter(key); setTab('tickets') }
 
       let body
       if (tab === 'overview') {
@@ -1008,10 +1057,10 @@ window.__ModuleLoader__.load({
             onRefresh: reload,
             onOpenRight: openRight,
             onOpenConsole: openConsole,
-            onClose: () => onClose?.(),
+            onClose: requestClose,
           }),
           h(ErrorBanner, { t, loadError, error }),
-          h(TabsBar, { t, tabs: visibleTabs, tab, onSelect: setTab }),
+          h(TabsBar, { t, tabs: visibleTabs, tab, onSelect: selectTab }),
           body,
           compact ? h('div', { className: 'syh-muted', style: { fontSize: 11, marginTop: 8 } }, t('closeHint')) : null,
         ),
@@ -1042,7 +1091,7 @@ window.__ModuleLoader__.load({
     return {
       inject: ['slots', 'layout', 'locale'],
       // D9 测试缝：只读暴露纯函数与数据层入口，不参与渲染。
-      __internals: { createConsoleStore, filterTicketsForSession, buildForm, formPayload, DICT, TABS, TAB_LABELS },
+      __internals: { createConsoleStore, filterTicketsForSession, buildForm, formPayload, isFormDirty, DICT, TABS, TAB_LABELS },
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh: DICT.zh, en: DICT.en }))
 

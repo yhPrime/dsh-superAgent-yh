@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   slugOf, intakeIdOf, shouldCompact, regionEndOf, createSingleSessionMaintainer,
   truncateUtf8, singleSessionTitle, guardSessionActivity, SINGLE_SESSION_TITLE_SUFFIX,
+  normalizeTitleText, sessionTitleOf, childAddressOf,
 } from '../../lib/single-session.js'
 import { normalizeConfig } from '../../lib/config.js'
 
@@ -38,17 +39,28 @@ function harness({
   pressure = { pressureTokens: 100, contextWindow: 1000 }, blank = true,
   selectError = null, selectSequence = [], pinError = null, renameError = null,
   agentAlive = true, config: configPatch = {},
-  renameNormalize = (title) => title, renameNoReturn = false,
-  children = [], childRecords = {}, childArchiveError = null,
+  renameNormalize = (title) => title, renameNoReturn = false, applyRename = true,
+  children = [], childRecords = {}, childArchiveError = null, childReadError = null,
 } = {}) {
-  const calls = { pin: 0, unpin: 0, archive: 0, archiveChild: 0, compact: 0, selected: [], rename: 0, titles: [], accepted: [], relay: [] }
+  const calls = { pin: 0, unpin: 0, archive: 0, archiveChild: 0, compact: 0, selected: [], rename: 0, titles: [], accepted: [], relay: [], childReads: [] }
   const store = { state: { singleSessions: {}, singleSession: {}, lastError: null }, save() {} }
   const config = normalizeConfig({ ...configPatch, singleSession: { enabled, idleMinutes: 30, pressureRatio: 0.5, ...(configPatch.singleSession ?? {}) } })
   const agent = { session: {} }
   let selectCalls = 0
+  // 可拨动的时钟：退避/观察窗口要用真实时间推进来验证。
+  let nowMs = 1_000_000
+  const clock = { now: () => nowMs, set: (ms) => { nowMs = ms }, advance: (ms) => { nowMs += ms } }
+  // 真机形状：标题在 projections.values.title，summary 顶层没有 title。
+  const setProjectedTitle = (sessionId, title) => {
+    const summary = sessions.find((item) => item.sessionId === sessionId)
+    if (!summary) return
+    summary.projections ??= { values: {} }
+    summary.projections.values.title = { ver: 1, seq: calls.rename, val: title }
+  }
   const maintainer = createSingleSessionMaintainer({
     ctx: {}, config, store, log: () => {}, redact: (x) => x,
     deps: {
+      now: () => clock.now(),
       listWorkspaces: () => workspaces,
       listSessions: async () => [...sessions, ...children],
       getState: async () => state,
@@ -56,6 +68,12 @@ function harness({
       getPressure: () => pressure,
       getCompaction: () => ({ compactNow: async () => { calls.compact += 1; return { ok: true } }, compactRegion: async () => ({ ok: true }) }),
       readEvents: async (sessionId) => childRecords[sessionId] ?? [],
+      // v0.9.4：子会话必须走 subagent 地址，维护器统一从 readChildEvents 读。
+      readChildEvents: async (child) => {
+        calls.childReads.push(child)
+        if (childReadError) throw new Error(childReadError)
+        return childRecords[child.sessionId] ?? []
+      },
       pinSession: async () => { if (pinError) throw new Error(pinError); calls.pin += 1 },
       unpinSession: async () => { calls.unpin += 1 },
       archiveSession: async () => { calls.archive += 1 },
@@ -75,8 +93,8 @@ function harness({
         calls.titles.push(title)
         const accepted = renameNormalize(title)
         calls.accepted.push(accepted)
-        const summary = sessions.find((item) => item.sessionId === sessionId)
-        if (summary) summary.title = accepted
+        // applyRename=false 模拟宿主 summary 投影滞后：事件已写，但 list() 还读到旧值。
+        if (applyRename) setProjectedTitle(sessionId, accepted)
         if (renameNoReturn) return undefined
         return { title: accepted, seq: calls.rename }
       },
@@ -89,8 +107,12 @@ function harness({
       },
     },
   })
-  return { maintainer, store, calls, config, sessions, workspaces }
+  return { maintainer, store, calls, config, sessions, workspaces, clock, setProjectedTitle }
 }
+
+/** 测试里取真机形状的标题。 */
+const projectedTitle = (session) => session?.projections?.values?.title?.val ?? session?.projections?.values?.title ?? null
+
 
 test('register：未开启 / 会话不存在 / 无工作区 / 工作区已占用 都拒绝', async () => {
   const off = harness({ enabled: false })
@@ -261,7 +283,7 @@ test('register：标题固定为「工作空间名+超级智能体团队」，ca
   assert.equal(h.store.state.singleSessionTitles.w1, expected)
   assert.equal(h.calls.rename, 1)
   assert.deepEqual(h.calls.titles, [expected])
-  assert.equal(h.sessions[0].title, expected)
+  assert.equal(projectedTitle(h.sessions[0]), expected)
 })
 
 test('register：改名失败只记日志，不撤销登记', async () => {
@@ -276,21 +298,24 @@ test('maintain：标题被改回时对账重写；会话不活着时不 rename',
   const live = harness()
   await live.maintainer.register('s1')
   const canonical = `repo${SINGLE_SESSION_TITLE_SUFFIX}`
-  live.sessions[0].title = 'drifted'
+  live.setProjectedTitle('s1', 'drifted')
+  live.clock.advance(70_000)
   live.calls.rename = 0
   await live.maintainer.maintain()
   assert.equal(live.calls.rename, 1)
   assert.equal(live.calls.titles[0], canonical)
-  assert.equal(live.sessions[0].title, canonical)
+  assert.equal(projectedTitle(live.sessions[0]), canonical)
 
   // 再次 maintain 不应重复 rename（写前比对）。
+  live.clock.advance(70_000)
   live.calls.rename = 0
   await live.maintainer.maintain()
   assert.equal(live.calls.rename, 0)
 
   const cold = harness({ agentAlive: false })
   await cold.maintainer.register('s1')
-  cold.sessions[0].title = 'drifted'
+  cold.setProjectedTitle('s1', 'drifted')
+  cold.clock.advance(70_000)
   cold.calls.rename = 0
   await cold.maintainer.maintain()
   assert.equal(cold.calls.rename, 0, '冷会话不 resume、不改名')
@@ -318,9 +343,10 @@ test('register：canonical 用 rename 返回值（宿主按 72 字节截断）�
   assert.ok(Buffer.byteLength(accepted, 'utf8') <= 72)
   assert.notEqual(accepted, h.calls.titles[0], '宿主返回的标题应 ≠ 传入值')
   assert.equal(h.store.state.singleSessionTitles.w1, accepted, 'canonical 必须是宿主返回值')
-  assert.equal(h.sessions[0].title, accepted)
+  assert.equal(projectedTitle(h.sessions[0]), accepted)
 
   // 第二轮：canonical 已等于宿主落下的标题，不该再 rename（否则就是 60s 风暴）。
+  h.clock.advance(70_000)
   h.calls.rename = 0
   await h.maintainer.maintain()
   assert.equal(h.calls.rename, 0, 'canonical 来自返回值时第二轮不得重复 rename')
@@ -348,7 +374,7 @@ test('maintain：旧 canonical 被宿主截断时以返回值为准，且只记�
   const selfTitle = singleSessionTitle(longName)
   h.store.state.singleSessions.w1 = 's1'
   h.store.state.singleSessionTitles = { w1: selfTitle }
-  h.sessions[0].title = 'drifted'
+  h.setProjectedTitle('s1', 'drifted')
   h.calls.rename = 0
   await h.maintainer.maintain()
   assert.equal(h.calls.rename, 1)
@@ -356,9 +382,90 @@ test('maintain：旧 canonical 被宿主截断时以返回值为准，且只记�
   assert.notEqual(accepted, selfTitle)
   assert.equal(h.store.state.singleSessionTitles.w1, accepted, 'maintain 也要回写返回值')
 
+  h.clock.advance(70_000)
   h.calls.rename = 0
   await h.maintainer.maintain()
   assert.equal(h.calls.rename, 0, '返回值的 canonical 不应每轮触发 rename 风暴')
+})
+
+test('标题：sessionTitleOf 优先读宿主 projections.values.title，兼容旧顶层 title', () => {
+  assert.equal(sessionTitleOf({ projections: { values: { title: 'A' } } }), 'A')
+  assert.equal(sessionTitleOf({ projections: { values: { title: { ver: 1, seq: 3, val: 'B' } } } }), 'B')
+  assert.equal(sessionTitleOf({ title: 'C' }), 'C')
+  assert.equal(sessionTitleOf({ projections: { values: {} } }), null)
+  assert.equal(sessionTitleOf({ projections: { values: { title: '' } } }), null)
+  assert.equal(sessionTitleOf(undefined), null)
+})
+
+test('标题：normalizeTitleText 与宿主对齐（空白折叠/去控制字符/80 字节截断）', () => {
+  assert.equal(normalizeTitleText('  a \t b\n '), 'a b')
+  assert.equal(normalizeTitleText('a\u0000\u200bb'), 'ab')
+  assert.equal(normalizeTitleText('\u001b[31mred\u001b[0m'), 'red')
+  assert.equal(normalizeTitleText('   '), '')
+  // 80 字节上限：中文 3 字节/字，只能留 26 个（78 字节）。
+  assert.equal(normalizeTitleText('中'.repeat(30)), '中'.repeat(26))
+})
+
+test('maintain：宿主 summary 滞后一拍时不每轮 rename', async () => {
+  const h = harness({ applyRename: false })
+  await h.maintainer.register('s1')
+  assert.equal(h.calls.rename, 1)
+  // 投影里还是改名前的旧标题（事件已写、summary 没跟上）。
+  h.setProjectedTitle('s1', '旧标题')
+  h.clock.advance(61_000)
+  await h.maintainer.maintain()
+  assert.equal(h.calls.rename, 2, '投影仍读旧值时按退避重试一次')
+  // 紧接着的下一轮（投影还没跟上）不许再 rename。
+  await h.maintainer.maintain()
+  assert.equal(h.calls.rename, 2, '滞后一拍不得触发重写')
+  h.clock.advance(1_000)
+  await h.maintainer.maintain()
+  assert.equal(h.calls.rename, 2, '同一 canonical 在观察窗口内只允许一次 rename')
+})
+
+test('maintain：同名不同空白字符规范化后不再 rename', async () => {
+  const h = harness()
+  await h.maintainer.register('s1')
+  const canonical = `repo${SINGLE_SESSION_TITLE_SUFFIX}`
+  h.setProjectedTitle('s1', `  ${canonical}\u200b \t`)
+  h.clock.advance(70_000)
+  h.calls.rename = 0
+  await h.maintainer.maintain()
+  assert.equal(h.calls.rename, 0)
+})
+
+test('maintain：连续不一致时 rename 间隔递增（1min → 5min → 30min 上限）', async () => {
+  const h = harness({ applyRename: false })
+  await h.maintainer.register('s1') // 第 1 次 rename（attempts=1）
+  h.setProjectedTitle('s1', '旧标题')
+  h.clock.advance(61_000)
+  await h.maintainer.maintain()
+  assert.equal(h.calls.rename, 2, '第一次重试：约 1 分钟后')
+  // attempts=2 → 下次要等 5 分钟
+  h.clock.advance(61_000)
+  await h.maintainer.maintain()
+  assert.equal(h.calls.rename, 2, '1 分钟后仍不到 5min 退避，不许重写')
+  h.clock.advance(4 * 60_000)
+  await h.maintainer.maintain()
+  assert.equal(h.calls.rename, 3, '等满 5 分钟才允许第二次重试')
+  // attempts=3 → 30 分钟
+  h.clock.advance(6 * 60_000)
+  await h.maintainer.maintain()
+  assert.equal(h.calls.rename, 3, '6 分钟还不够')
+  h.clock.advance(24 * 60_000)
+  await h.maintainer.maintain()
+  assert.equal(h.calls.rename, 4, '等满 30 分钟才允许第三次重试')
+})
+
+test('maintain：标题没被改乱时只 rename 一次（不会风暴）', async () => {
+  const h = harness()
+  await h.maintainer.register('s1')
+  for (let round = 0; round < 5; round += 1) {
+    h.clock.advance(60_000)
+    await h.maintainer.maintain()
+  }
+  assert.equal(h.calls.rename, 1)
+  assert.equal(projectedTitle(h.sessions[0]), `repo${SINGLE_SESSION_TITLE_SUFFIX}`)
 })
 
 test('register：renameSession 没有返回值时回落用自算标题', async () => {
@@ -413,6 +520,7 @@ test('子会话纳管：有工具调用 = 真工单，登记并汇报；空闲�
   assert.equal(ticket.status, 'running')
   assert.equal(ticket.childSessionId, 'c1')
   assert.equal(ticket.targetSessionId, 's1')
+  assert.equal(h.calls.childReads[0].parentSessionId, 's1', '子会话读取要带着父会话身份')
   assert.deepEqual(h.calls.relay, [{ id: 'subagent:c1', kind: 'started' }])
 
   child.running = false
@@ -488,4 +596,21 @@ test('子会话纳管：归档失败记 lastError、不抛；adoptChildren=false
   await off.maintainer.maintain()
   assert.equal(off.calls.archiveChild, 0)
   assert.equal((off.store.state.tickets ?? {})['subagent:c3'], undefined)
+})
+
+test('childAddressOf：子会话必须用 subagent 地址（mode unknown）', () => {
+  assert.deepEqual(childAddressOf({ parentSessionId: 'p1', sessionId: 'c1' }), {
+    kind: 'subagent', parentSessionId: 'p1', childSessionId: 'c1', mode: 'unknown',
+  })
+  assert.equal(childAddressOf({ sessionId: 'c1' }), null)
+  assert.equal(childAddressOf(null), null)
+})
+
+test('子会话纳管：读取抛错时记日志、判 unknown、不归档', async () => {
+  const ghost = { sessionId: 'c11', parentSessionId: 's1', origin: 'subagent', running: false, updatedAt: Date.now() - 5 * 60_000, title: '修标题' }
+  const h = harness({ children: [ghost], childReadError: 'session/agent-busy' })
+  await h.maintainer.register('s1')
+  await h.maintainer.maintain()
+  assert.ok(h.store.state.singleSessionChildUnknown.c11, '读失败要进 unknown 重试队列')
+  assert.equal(h.calls.archiveChild, 0)
 })

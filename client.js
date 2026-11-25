@@ -9,12 +9,14 @@ window.__ModuleLoader__.load({
     const BASE = '/dsh-superagent-yh'
     const PANEL_ID = NS
     const TABS = ['overview', 'tickets', 'roles', 'sources', 'settings']
+    // 页签 → DICT 标签键的显式映射：每个页签必须有独立标签，禁止落到 fallback（S3 修复角色页签显示成概览）。
+    const TAB_LABELS = { overview: 'overview', tickets: 'ticketsTab', roles: 'rolesTab', sources: 'sourcesTab', settings: 'settingsTab' }
 
     const DICT = {
       zh: {
         title: 'Superagent 控制台',
         subtitle: '每个工单独立会话与目录；主线只收三条短消息',
-        overview: '概览', ticketsTab: '工单', sourcesTab: '源', settingsTab: '设置',
+        overview: '概览', ticketsTab: '工单', rolesTab: '角色', sourcesTab: '源', settingsTab: '设置',
         noRoles: '还没有常驻角色。单会话遇到重复的活会用 delegate 带 role 派出，第一次出现时这里会自动建。',
         roleName: '角色', roleWorkspace: '工作区', lastTask: '最近任务',
         removeRole: '解除角色', roleRemoveConfirm: '解除这个常驻角色？会归档它的会话（角色笔记保留）。',
@@ -56,7 +58,7 @@ window.__ModuleLoader__.load({
       en: {
         title: 'Superagent console',
         subtitle: 'One session and directory per ticket; the main line gets three short messages',
-        overview: 'Overview', ticketsTab: 'Tickets', sourcesTab: 'Sources', settingsTab: 'Settings',
+        overview: 'Overview', ticketsTab: 'Tickets', rolesTab: 'Roles', sourcesTab: 'Sources', settingsTab: 'Settings',
         noRoles: 'No permanent roles yet. When the single session delegates repeat work with role names, they are created here on first use.',
         roleName: 'Role', roleWorkspace: 'Workspace', lastTask: 'Last task',
         removeRole: 'Remove role', roleRemoveConfirm: 'Remove this permanent role? Its session is archived (notes are kept).',
@@ -403,6 +405,22 @@ window.__ModuleLoader__.load({
 .syh-capsule input:checked ~ i::after{transform:translateX(12px);background:#fff}
 .syh-capsule input:checked ~ span{color:var(--dsw-alias-brand-primary)}
 .syh-capsule:has(input:checked){border-color:var(--dsw-alias-brand-primary)}
+/* 输入区登记按钮（原 PILL_CSS，S3 合并） */
+.sysi{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.sysi:hover:not(:disabled){background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
+.sysi:disabled{cursor:default;opacity:.7}
+/* 会话内任务板（原 BOARD_CSS，S3 合并） */
+.syhb{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:9px;padding:8px 10px;margin:6px 0;font:12px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.syhb h4{margin:0 0 6px;font-size:12px;font-weight:600;display:flex;gap:8px;align-items:center;color:var(--dsw-alias-label-primary)}
+.syhb .syhb-muted{color:var(--dsw-alias-label-secondary);font-weight:400}
+.syhb-row{display:flex;gap:6px;align-items:center;padding:3px 0;color:var(--dsw-alias-label-primary)}
+.syhb-row:hover{background:var(--dsw-alias-bg-layer-2)}
+.syhb-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;background:var(--dsw-alias-label-secondary)}
+.syhb-dot.running{background:var(--dsw-alias-brand-primary)}
+.syhb-dot.queued,.syhb-dot.waiting{background:var(--dsw-alias-state-warn-primary)}
+.syhb-dot.done{background:var(--dsw-alias-state-success-primary)}
+.syhb-dot.failed{background:var(--dsw-alias-state-error-primary)}
+.syhb-subject{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 `
 
     function Badge({ status, t }) {
@@ -426,11 +444,6 @@ window.__ModuleLoader__.load({
     }
 
     // 输入区权限右侧的小图标按钮：点亮即把本会话登记为该工作区唯一的单会话。
-    const PILL_CSS = `
-.sysi{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
-.sysi:hover:not(:disabled){background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
-.sysi:disabled{cursor:default;opacity:.7}
-`
 
     function SuperagentGlyph({ size = 16 }) {
       return h('svg', { width: size, height: size, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true, style: { display: 'block' } },
@@ -473,7 +486,7 @@ window.__ModuleLoader__.load({
         title,
         'aria-label': t('pill'),
         onClick: turnOn,
-      }, h('style', null, PILL_CSS), h(SuperagentGlyph, null))
+      }, h('style', null, CSS), h(SuperagentGlyph, null))
     }
 
     function PressureBar({ ratio }) {
@@ -482,20 +495,6 @@ window.__ModuleLoader__.load({
     }
 
     // 会话内任务板：像智能体团队一样，在会话头看到这个单会话的工单进度。
-    const BOARD_CSS = `
-.syhb{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:9px;padding:8px 10px;margin:6px 0;font:12px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
-.syhb h4{margin:0 0 6px;font-size:12px;font-weight:600;display:flex;gap:8px;align-items:center;color:var(--dsw-alias-label-primary)}
-.syhb .syhb-muted{color:var(--dsw-alias-label-secondary);font-weight:400}
-.syhb-row{display:flex;gap:6px;align-items:center;padding:3px 0;color:var(--dsw-alias-label-primary)}
-.syhb-row:hover{background:var(--dsw-alias-bg-layer-2)}
-.syhb-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;background:var(--dsw-alias-label-secondary)}
-.syhb-dot.running{background:var(--dsw-alias-brand-primary)}
-.syhb-dot.queued,.syhb-dot.waiting{background:var(--dsw-alias-state-warn-primary)}
-.syhb-dot.done{background:var(--dsw-alias-state-success-primary)}
-.syhb-dot.failed{background:var(--dsw-alias-state-error-primary)}
-.syhb-subject{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-`
-
     function SessionBoard(props) {
       const t = useT(props.ctx)
       const sessionId = props.sessionId
@@ -511,7 +510,7 @@ window.__ModuleLoader__.load({
       const running = tickets.filter((item) => item.status === 'running').length
       const pending = tickets.filter((item) => item.status === 'queued').length
       return h('section', { className: 'syhb', 'data-superagent-board': '' },
-        h('style', null, BOARD_CSS),
+        h('style', null, CSS),
         h('h4', null, t('boardTitle'),
           h('span', { className: 'syhb-muted' }, [
             running > 0 ? t('boardRunning', { count: running }) : null,
@@ -533,6 +532,335 @@ window.__ModuleLoader__.load({
       )
     }
 
+    // S3 视图层：概览 / 工单 / 角色 / 源 / 设置提为模块级、显式 props 的纯组件。
+    // 视图只接收 Console 传入的数据与回调，不直接订阅 consoleStore、不发请求。
+
+    function ErrorBanner({ t, loadError, error }) {
+      if (!loadError && !error) return null
+      return h('div', { className: 'syh-card' },
+        loadError ? h('div', { className: 'syh-err' }, t('loadFailed') + '：' + loadError) : null,
+        error ? h('div', { className: 'syh-err' }, error) : null,
+      )
+    }
+
+    function TabsBar({ t, tabs, tab, onSelect }) {
+      return h('div', { className: 'syh-tabs' }, tabs.map((key) => h('button', {
+        key,
+        className: `syh-tab ${tab === key ? 'active' : ''}`,
+        onClick: () => onSelect(key),
+      }, t(TAB_LABELS[key] ?? 'overview'))))
+    }
+
+    function StatCards({ t, stats, onPick }) {
+      return h('div', { className: 'syh-stats' },
+        ['queued', 'running', 'waiting', 'done', 'failed'].map((key) => h(StatCard, {
+          key,
+          label: t(key),
+          value: stats[key],
+          onClick: () => onPick(key),
+        })),
+      )
+    }
+
+    function ConsoleHeader({ t, data, compact, singleBusy, onToggleSingle, onRefresh, onOpenRight, onOpenConsole, onClose }) {
+      return h('div', { className: 'syh-head' },
+        h('div', { className: 'syh-grow' },
+          h('h1', null, t('title')),
+          h('div', { className: 'syh-sub' }, t('subtitle')),
+        ),
+        h('span', { className: 'syh-live' },
+          h('i', { className: `syh-dot ${data?.dryRun ? 'dry' : ''}` }),
+          `v${data?.config?.version || '?'} · ${data?.dryRun ? 'dryRun' : 'live'}`,
+        ),
+        h('label', { className: 'syh-capsule', title: t('singleHint') },
+          h('input', {
+            type: 'checkbox',
+            checked: data?.singleSession?.enabled === true,
+            disabled: singleBusy,
+            onChange: (event) => onToggleSingle(event.target.checked),
+          }),
+          h('span', null, t('capsule')),
+          h('i', null),
+        ),
+        h('button', { className: 'syh-btn', onClick: onRefresh }, t('refresh')),
+        compact
+          ? h('button', { className: 'syh-btn syh-btn-primary', onClick: onOpenConsole }, t('openConsole'))
+          : h('button', { className: 'syh-btn', onClick: onOpenRight }, t('openRight')),
+        h('button', { className: 'syh-btn', onClick: () => onClose?.() }, t('close')),
+      )
+    }
+
+    function OverviewView({ t, data, stats, tickets, sourceHealth, enabledSources, busySession, onStatPick, onOpenSession, onCompactNow, onDeleteSingle }) {
+      return h('div', null,
+        h(StatCards, { t, stats, onPick: onStatPick }),
+        h('div', { className: 'syh-card' },
+          h('h2', null, t('workspace'), h('span', { className: 'syh-muted' }, ` (${data?.singleSession?.workspaces?.length ?? 0})`)),
+          !data?.singleSession?.enabled
+            ? h('div', { className: 'syh-empty' }, t('noWorkspace'))
+            : (data.singleSession.workspaces ?? []).length === 0
+              ? h('div', { className: 'syh-empty' }, t('noWorkspace'))
+              : data.singleSession.workspaces.map((workspace) => h('div', { className: 'syh-ws', key: workspace.sessionId || workspace.path },
+                  h('div', null,
+                    h('div', { className: 'syh-ws-path', title: workspace.path }, workspace.path),
+                    h('div', { className: 'syh-ws-meta' },
+                      workspace.missing
+                        ? t('wsMissing')
+                        : `${workspace.sessionId} · ${t('wsLastCompact')}: ${workspace.lastCompact ? new Date(workspace.lastCompact.at).toLocaleString() : t('wsNever')}`,
+                    ),
+                    workspace.missing ? null : h('div', { style: { marginTop: 6, minWidth: 220 } },
+                      h('div', { className: 'syh-ws-meta' }, `${t('wsPressure')}: ${workspace.pressureTokens}/${workspace.contextWindow || '?'} (${Math.round((workspace.ratio || 0) * 100)}%)`),
+                      h(PressureBar, { ratio: workspace.ratio || 0 }),
+                    ),
+                  ),
+                  h('div', { style: { display: 'flex', gap: 6, alignItems: 'center' } },
+                    h('span', { className: `syh-badge syh-${workspace.running ? 'running' : workspace.status === 'missing' ? 'failed' : 'done'}` }, workspace.running ? t('wsRunning') : (workspace.status || 'idle')),
+                    workspace.sessionId ? h('button', { className: 'syh-btn', onClick: () => onOpenSession(workspace.sessionId) }, t('session')) : null,
+                    workspace.sessionId ? h('button', { className: 'syh-btn', disabled: busySession === workspace.sessionId, onClick: () => onCompactNow(workspace.sessionId) }, busySession === workspace.sessionId ? t('compacting') : t('compactNow')) : null,
+                    workspace.sessionId ? h('button', { className: 'syh-btn syh-btn-danger', disabled: busySession === workspace.sessionId, onClick: () => onDeleteSingle(workspace.sessionId) }, t('deleteSingle')) : null,
+                  ),
+                )),
+        ),
+        h('div', { className: 'syh-card' },
+          h('h2', null, t('sourceHealth')),
+          enabledSources.length === 0
+            ? h('div', { className: 'syh-empty' }, t('noSources'))
+            : enabledSources.map((key) => {
+                const health = sourceHealth[key] ?? {}
+                return h('div', { key, className: 'syh-ws' },
+                  h('div', null,
+                    h('div', { className: 'syh-ws-path' }, key),
+                    h('div', { className: 'syh-ws-meta' }, `${t('watermark')}: ${health.watermark ? new Date(health.watermark).toLocaleString() : '—'} · ${t('added')}: ${health.added ?? 0}`),
+                  ),
+                  h('span', { className: `syh-badge ${health.ok === undefined ? '' : health.ok ? 'syh-done' : 'syh-failed'}` }, health.ok === undefined ? '—' : health.ok ? t('stateOk') : t('stateFail')),
+                )
+              }),
+          data?.lastError ? h('div', { className: 'syh-err', style: { marginTop: 8 } }, data.lastError) : null,
+        ),
+        h('div', { className: 'syh-card' },
+          h('h2', null, t('recent')),
+          tickets.length === 0
+            ? h('div', { className: 'syh-empty' }, t('noTickets'))
+            : tickets.slice(0, 10).map((ticket) => h('div', { key: ticket.id, className: 'syh-ws' },
+                h('div', null,
+                  h('div', { className: 'syh-ws-path', style: { fontSize: 12, fontWeight: 500 } }, ticket.title || ticket.id),
+                  h('div', { className: 'syh-ws-meta' }, `${ticket.id} · ${new Date(ticket.createdAt || Date.now()).toLocaleString()}`),
+                ),
+                h(Badge, { status: ticket.status, t }),
+              )),
+        ),
+      )
+    }
+
+    function TicketsView({ t, tickets, filter, onFilter, query, onQuery, log, onCloseLog, onAct, onOpenSession, onShowLog }) {
+      const matchFilter = (ticket) => {
+        if (filter !== 'all' && ticket.status !== filter) return false
+        if (!query.trim()) return true
+        const needle = query.trim().toLowerCase()
+        return ticket.id.toLowerCase().includes(needle) || String(ticket.title || '').toLowerCase().includes(needle)
+      }
+      const list = tickets.filter(matchFilter)
+      return h('div', null,
+        h('div', { className: 'syh-chips' },
+          ['all', 'queued', 'running', 'waiting', 'done', 'failed'].map((key) => h('button', {
+            key,
+            className: `syh-chip ${filter === key ? 'active' : ''}`,
+            onClick: () => onFilter(key),
+          }, key === 'all' ? t('all') : t(key))),
+        ),
+        h('input', { className: 'syh-search', value: query, placeholder: t('search'), onChange: (event) => onQuery(event.target.value) }),
+        h('div', { className: 'syh-card' },
+          list.length === 0
+            ? h('div', { className: 'syh-empty' }, query ? t('noMatch') : t('noTickets'))
+            : h('table', { className: 'syh-table' },
+                h('thead', null, h('tr', null,
+                  h('th', null, t('tickets')),
+                  h('th', null, t('source')),
+                  h('th', null, t('status')),
+                  h('th', null, t('attempts')),
+                  h('th', null, t('lastError')),
+                  h('th', null, t('actions')),
+                )),
+                h('tbody', null, list.map((ticket) => h('tr', { key: ticket.id },
+                  h('td', null,
+                    h('code', { style: { fontSize: 11 } }, ticket.id),
+                    h('div', { style: { fontSize: 12 } }, ticket.title || ''),
+                    ticket.question ? h('div', { className: 'syh-err', style: { fontSize: 11 } }, '？' + ticket.question) : null,
+                  ),
+                  h('td', null, h('span', { className: 'syh-muted' }, ticket.source)),
+                  h('td', null, h(Badge, { status: ticket.status, t })),
+                  h('td', null, String(ticket.attempts ?? 0)),
+                  h('td', null, ticket.lastError ? h('div', { className: 'syh-err' }, ticket.lastError) : h('span', { className: 'syh-muted' }, '—')),
+                  h('td', null,
+                    h('div', { style: { display: 'flex', gap: 5, flexWrap: 'wrap' } },
+                      ticket.status === 'failed' ? h('button', { className: 'syh-btn', onClick: () => onAct(ticket, 'retry') }, t('retry')) : null,
+                      (ticket.status === 'running' || ticket.status === 'waiting') ? h('button', { className: 'syh-btn syh-btn-danger', onClick: () => onAct(ticket, 'cancel') }, t('cancel')) : null,
+                      ticket.sessionId ? h('button', { className: 'syh-btn', onClick: () => onOpenSession(ticket.sessionId) }, t('session')) : null,
+                      h('button', { className: 'syh-btn', onClick: () => onShowLog(ticket) }, t('log')),
+                    ),
+                  ),
+                ))),
+              ),
+          log ? h('div', null,
+            h('div', { className: 'syh-row', style: { marginTop: 10 } },
+              h('strong', { style: { fontSize: 12 } }, log.id),
+              h('button', { className: 'syh-btn', onClick: onCloseLog }, t('closeLog')),
+            ),
+            h('pre', { className: 'syh-pre' }, (log.truncated ? '…（只显示最后 200 行）\n' : '') + log.text),
+          ) : null,
+        ),
+      )
+    }
+
+    function RolesView({ t, roles, delegate, onRemoveRole }) {
+      const queue = delegate
+      const meta = h('div', { className: 'syh-row', style: { marginBottom: 10 } },
+        queue ? h('span', { className: 'syh-muted', style: { fontSize: 12 } },
+          `${t('delegateLimit')} ${queue.limit} · ${t('delegateQueued')} ${queue.pending}`) : null,
+      )
+      return h('div', null,
+        meta,
+        h('div', { className: 'syh-card' },
+          roles.length === 0
+            ? h('div', { className: 'syh-empty' }, t('noRoles'))
+            : h('table', { className: 'syh-table' },
+                h('thead', null, h('tr', null,
+                  h('th', null, t('roleName')),
+                  h('th', null, t('roleWorkspace')),
+                  h('th', null, t('status')),
+                  h('th', null, t('lastTask')),
+                  h('th', null, t('actions')),
+                )),
+                h('tbody', null, roles.filter((row) => row.role).map((row) => h('tr', { key: row.role },
+                  h('td', null,
+                    h('strong', null, row.role),
+                    h('div', { className: 'syh-muted', style: { fontSize: 11 } }, row.sessionId),
+                  ),
+                  h('td', null, h('span', { className: 'syh-muted' }, row.workspaceId || '—')),
+                  h('td', null, row.lastError
+                    ? h('span', { className: 'syh-err' }, row.lastError)
+                    : h('span', { className: row.running ? 'syh-dot running' : 'syh-dot done', style: { marginRight: 6 } }),
+                      h('span', { className: 'syh-muted' }, row.running ? t('running') : t(row.status === 'failed' ? 'failed' : 'stateOk'))),
+                  h('td', null, row.lastTaskAt ? new Date(row.lastTaskAt).toLocaleString() : '—'),
+                  h('td', null, h('button', {
+                    className: 'syh-btn syh-btn-danger',
+                    onClick: () => onRemoveRole(row.role),
+                  }, t('removeRole'))),
+                ))),
+              ),
+        ),
+      )
+    }
+
+    function SourceCard({ t, title, section, fields, extra, onField }) {
+      return h('div', { className: 'syh-src' },
+        h('div', { className: 'syh-src-head' }, title,
+          h(Check, { label: t('enabled'), checked: section.enabled, onChange: (v) => onField(`${section.key}.enabled`, v) }),
+          h(Check, { label: t('confirmWrites'), checked: section.confirmWrites, onChange: (v) => onField(`${section.key}.confirmWrites`, v) }),
+        ),
+        h('div', { className: 'syh-row' },
+          fields.map(([key, label]) => h(Field, { key, label }, h(TextInput, { value: section[key], onChange: (v) => onField(`${section.key}.${key}`, v) }))),
+        ),
+        extra ?? null,
+      )
+    }
+
+    function SaveBar({ t, form, msg, error, onSave }) {
+      return h('div', { className: 'syh-savebar' },
+        h('button', { className: 'syh-btn syh-btn-primary', onClick: onSave, disabled: !form }, t('save')),
+        msg ? h('span', { className: `syh-msg ${error ? 'syh-msgerr' : ''}` }, msg) : null,
+        error ? h('span', { className: 'syh-msg syh-msgerr' }, error) : null,
+      )
+    }
+
+    function SourcesView({ t, form, onField, msg, error, onSave }) {
+      if (!form) return h('div', { className: 'syh-empty' }, t('loadFailed'))
+      return h('div', { className: 'syh-card' },
+        h('h2', null, t('sourcesTab')),
+        h(SourceCard, {
+          t,
+          title: t('github'),
+          section: { ...form.github, key: 'github' },
+          fields: [['repo', t('repo')], ['labels', t('labels')], ['authors', t('authors')], ['apiBase', t('apiBase')]],
+          onField,
+          extra: h('div', { className: 'syh-row' },
+            h(Field, { label: t('token') }, h(TextInput, { type: 'password', value: form.github.token, placeholder: form.github.hasToken ? t('tokenSet') : t('tokenUnset'), onChange: (v) => onField('github.token', v) })),
+          ),
+        }),
+        h(SourceCard, {
+          t,
+          title: t('feishu'),
+          section: { ...form.feishu, key: 'feishu' },
+          fields: [['appId', t('appId')], ['chatIds', t('chatIds')], ['authors', t('authors')]],
+          onField,
+          extra: h('div', { className: 'syh-row' },
+            h(Field, { label: t('appSecret') }, h(TextInput, { type: 'password', value: form.feishu.appSecret, placeholder: form.feishu.hasSecret ? t('tokenSet') : t('tokenUnset'), onChange: (v) => onField('feishu.appSecret', v) })),
+            h(Check, { label: t('requireMention'), checked: form.feishu.requireMention, onChange: (v) => onField('feishu.requireMention', v) }),
+          ),
+        }),
+        h('div', { className: 'syh-src' },
+          h('div', { className: 'syh-src-head' }, t('qq'),
+            h(Check, { label: t('enabled'), checked: form.qq.enabled, onChange: (v) => onField('qq.enabled', v) }),
+            h(Field, { label: t('mode') }, h('select', { value: form.qq.mode, onChange: (e) => onField('qq.mode', e.target.value) },
+              h('option', { value: 'personal' }, t('personal')),
+              h('option', { value: 'official' }, t('official')),
+            )),
+            h(Check, { label: t('requireMention'), checked: form.qq.requireAt, onChange: (v) => onField('qq.requireAt', v) }),
+            h(Check, { label: t('confirmWrites'), checked: form.qq.confirmWrites, onChange: (v) => onField('qq.confirmWrites', v) }),
+          ),
+          h('div', { className: 'syh-row' },
+            h(Field, { label: t('qqSenders') }, h(TextInput, { value: form.qq.authors, onChange: (v) => onField('qq.authors', v) })),
+            h(Field, { label: t('qqTargets') }, h(TextInput, { value: form.qq.allowedGroups, onChange: (v) => onField('qq.allowedGroups', v) })),
+          ),
+          form.qq.mode === 'personal'
+            ? h('div', { className: 'syh-row' },
+                h(Field, { label: t('httpUrl') }, h(TextInput, { value: form.qq.personal.httpUrl, onChange: (v) => onField('qq.personal.httpUrl', v) })),
+                h(Field, { label: t('wsUrl') }, h(TextInput, { value: form.qq.personal.wsUrl, onChange: (v) => onField('qq.personal.wsUrl', v) })),
+                h(Field, { label: t('selfId') }, h(TextInput, { value: form.qq.personal.selfId, onChange: (v) => onField('qq.personal.selfId', v) })),
+              )
+            : h('div', { className: 'syh-row' },
+                h(Field, { label: t('host') }, h(TextInput, { value: form.qq.official.host, onChange: (v) => onField('qq.official.host', v) })),
+                h(Field, { label: t('port') }, h(TextInput, { type: 'number', value: form.qq.official.port, onChange: (v) => onField('qq.official.port', v) })),
+                h(Field, { label: t('token') }, h(TextInput, { type: 'password', value: form.qq.official.token, placeholder: form.qq.official.hasToken ? t('tokenSet') : t('tokenUnset'), onChange: (v) => onField('qq.official.token', v) })),
+              ),
+        ),
+        h(SaveBar, { t, form, msg, error, onSave }),
+      )
+    }
+
+    function SettingsView({ t, form, onField, msg, error, onSave }) {
+      if (!form) return h('div', { className: 'syh-empty' }, t('loadFailed'))
+      const s = form.single
+      return h('div', null,
+        h('div', { className: 'syh-card' },
+          h('h2', null, t('basic')),
+          h('div', { className: 'syh-row' },
+            h(Check, { label: t('dryRun'), checked: form.dryRun, onChange: (v) => onField('dryRun', v) }),
+            h(Field, { label: t('mainSession') }, h(TextInput, { value: form.mainSessionId, onChange: (v) => onField('mainSessionId', v) })),
+            h(Field, { label: t('repoPath') }, h(TextInput, { value: form.repoPath, onChange: (v) => onField('repoPath', v) })),
+            h(Field, { label: t('poll') }, h(TextInput, { type: 'number', value: form.pollIntervalMs, onChange: (v) => onField('pollIntervalMs', v) })),
+            h(Field, { label: t('preset') }, h(TextInput, { value: form.workerPreset, onChange: (v) => onField('workerPreset', v) })),
+          ),
+        ),
+        h('div', { className: 'syh-card' },
+          h('h2', null, t('singleTitle')),
+          h('div', { className: 'syh-muted', style: { fontSize: 12, marginBottom: 10 } }, t('singleHint')),
+          h('div', { className: 'syh-row' },
+            h(Check, { label: t('singleEnabled'), checked: s.enabled, onChange: (v) => onField('single.enabled', v) }),
+            h(Check, { label: t('aggressive'), checked: s.aggressive, onChange: (v) => onField('single.aggressive', v) }),
+          ),
+          h('div', { className: 'syh-row' },
+            h(Field, { label: t('idleMinutes') }, h(TextInput, { type: 'number', value: s.idleMinutes, onChange: (v) => onField('single.idleMinutes', v) })),
+            h(Field, { label: t('pressureRatio') }, h(TextInput, { type: 'number', value: s.pressureRatio, onChange: (v) => onField('single.pressureRatio', v) })),
+            h(Field, { label: t('keepRecentTurns') }, h(TextInput, { type: 'number', value: s.keepRecentTurns, onChange: (v) => onField('single.keepRecentTurns', v) })),
+            h(Field, { label: t('sessionIdPrefix') }, h(TextInput, { value: s.sessionIdPrefix, onChange: (v) => onField('single.sessionIdPrefix', v) })),
+            h(Field, { label: t('singlePreset') }, h(TextInput, { value: s.preset, onChange: (v) => onField('single.preset', v) })),
+          ),
+        ),
+        h(SaveBar, { t, form, msg, error, onSave }),
+      )
+    }
+    // S3 之后的 Console 只做状态、数据、动作与视图选择；渲染细节在模块级视图组件里。
+    // 行数口径（计划书 §09）：function Console( 起至匹配右花括号止，含注释与空行，≤250 行。
     function Console({ ctx, compact = false, onClose }) {
       const t = useT(ctx)
       const { data, error: loadError, reload } = useConsoleResource('status')
@@ -647,327 +975,43 @@ window.__ModuleLoader__.load({
         try { right.openTab(NS) } catch (reason) { setError(String(reason?.message || reason)) }
       }
 
+      const openConsole = () => ctx.layout.selectPanel(PANEL_ID)
       const stats = data?.stats ?? { queued: 0, running: 0, waiting: 0, done: 0, failed: 0 }
       const tickets = [...(data?.tickets ?? [])].reverse()
-      const visibleTabs = compact ? ['overview', 'tickets'] : TABS
-
-      const header = h('div', { className: 'syh-head' },
-        h('div', { className: 'syh-grow' },
-          h('h1', null, t('title')),
-          h('div', { className: 'syh-sub' }, t('subtitle')),
-        ),
-        h('span', { className: 'syh-live' },
-          h('i', { className: `syh-dot ${data?.dryRun ? 'dry' : ''}` }),
-          `v${data?.config?.version || '?'} · ${data?.dryRun ? 'dryRun' : 'live'}`,
-        ),
-        h('label', { className: 'syh-capsule', title: t('singleHint') },
-          h('input', {
-            type: 'checkbox',
-            checked: data?.singleSession?.enabled === true,
-            disabled: singleBusy,
-            onChange: (event) => toggleSingle(event.target.checked),
-          }),
-          h('span', null, t('capsule')),
-          h('i', null),
-        ),
-        h('button', { className: 'syh-btn', onClick: () => reload() }, t('refresh')),
-        compact
-          ? h('button', { className: 'syh-btn syh-btn-primary', onClick: () => ctx.layout.selectPanel(PANEL_ID) }, t('openConsole'))
-          : h('button', { className: 'syh-btn', onClick: openRight }, t('openRight')),
-        h('button', { className: 'syh-btn', onClick: () => onClose?.() }, t('close')),
-      )
-
-      const statsRow = h('div', { className: 'syh-stats' },
-        ['queued', 'running', 'waiting', 'done', 'failed'].map((key) => h(StatCard, {
-          key,
-          label: t(key),
-          value: stats[key],
-          onClick: () => { setFilter(key); setTab('tickets') },
-        })),
-      )
-
-      const errorBox = (loadError || error) ? h('div', { className: 'syh-card' },
-        loadError ? h('div', { className: 'syh-err' }, t('loadFailed') + '：' + loadError) : null,
-        error ? h('div', { className: 'syh-err' }, error) : null,
-      ) : null
-
       const sourceHealth = data?.sources ?? {}
       const enabledSources = data?.config?.sources ? Object.entries(data.config.sources).filter(([, value]) => value.enabled).map(([key]) => key) : []
+      const visibleTabs = compact ? ['overview', 'tickets'] : TABS
+      const pickStat = (key) => { setFilter(key); setTab('tickets') }
 
-      function overview() {
-        return h('div', null,
-          statsRow,
-          h('div', { className: 'syh-card' },
-            h('h2', null, t('workspace'), h('span', { className: 'syh-muted' }, ` (${data?.singleSession?.workspaces?.length ?? 0})`)),
-            !data?.singleSession?.enabled
-              ? h('div', { className: 'syh-empty' }, t('noWorkspace'))
-              : (data.singleSession.workspaces ?? []).length === 0
-                ? h('div', { className: 'syh-empty' }, t('noWorkspace'))
-                : data.singleSession.workspaces.map((workspace) => h('div', { className: 'syh-ws', key: workspace.sessionId || workspace.path },
-                    h('div', null,
-                      h('div', { className: 'syh-ws-path', title: workspace.path }, workspace.path),
-                      h('div', { className: 'syh-ws-meta' },
-                        workspace.missing
-                          ? t('wsMissing')
-                          : `${workspace.sessionId} · ${t('wsLastCompact')}: ${workspace.lastCompact ? new Date(workspace.lastCompact.at).toLocaleString() : t('wsNever')}`,
-                      ),
-                      workspace.missing ? null : h('div', { style: { marginTop: 6, minWidth: 220 } },
-                        h('div', { className: 'syh-ws-meta' }, `${t('wsPressure')}: ${workspace.pressureTokens}/${workspace.contextWindow || '?'} (${Math.round((workspace.ratio || 0) * 100)}%)`),
-                        h(PressureBar, { ratio: workspace.ratio || 0 }),
-                      ),
-                    ),
-                    h('div', { style: { display: 'flex', gap: 6, alignItems: 'center' } },
-                      h('span', { className: `syh-badge syh-${workspace.running ? 'running' : workspace.status === 'missing' ? 'failed' : 'done'}` }, workspace.running ? t('wsRunning') : (workspace.status || 'idle')),
-                      workspace.sessionId ? h('button', { className: 'syh-btn', onClick: () => openSession(workspace.sessionId) }, t('session')) : null,
-                      workspace.sessionId ? h('button', { className: 'syh-btn', disabled: busySession === workspace.sessionId, onClick: () => compactNow(workspace.sessionId) }, busySession === workspace.sessionId ? t('compacting') : t('compactNow')) : null,
-                      workspace.sessionId ? h('button', { className: 'syh-btn syh-btn-danger', disabled: busySession === workspace.sessionId, onClick: () => deleteSingle(workspace.sessionId) }, t('deleteSingle')) : null,
-                    ),
-                  )),
-          ),
-          h('div', { className: 'syh-card' },
-            h('h2', null, t('sourceHealth')),
-            enabledSources.length === 0
-              ? h('div', { className: 'syh-empty' }, t('noSources'))
-              : enabledSources.map((key) => {
-                  const health = sourceHealth[key] ?? {}
-                  return h('div', { key, className: 'syh-ws' },
-                    h('div', null,
-                      h('div', { className: 'syh-ws-path' }, key),
-                      h('div', { className: 'syh-ws-meta' }, `${t('watermark')}: ${health.watermark ? new Date(health.watermark).toLocaleString() : '—'} · ${t('added')}: ${health.added ?? 0}`),
-                    ),
-                    h('span', { className: `syh-badge ${health.ok === undefined ? '' : health.ok ? 'syh-done' : 'syh-failed'}` }, health.ok === undefined ? '—' : health.ok ? t('stateOk') : t('stateFail')),
-                  )
-                }),
-            data?.lastError ? h('div', { className: 'syh-err', style: { marginTop: 8 } }, data.lastError) : null,
-          ),
-          h('div', { className: 'syh-card' },
-            h('h2', null, t('recent')),
-            tickets.length === 0
-              ? h('div', { className: 'syh-empty' }, t('noTickets'))
-              : tickets.slice(0, 10).map((ticket) => h('div', { key: ticket.id, className: 'syh-ws' },
-                  h('div', null,
-                    h('div', { className: 'syh-ws-path', style: { fontSize: 12, fontWeight: 500 } }, ticket.title || ticket.id),
-                    h('div', { className: 'syh-ws-meta' }, `${ticket.id} · ${new Date(ticket.createdAt || Date.now()).toLocaleString()}`),
-                  ),
-                  h(Badge, { status: ticket.status, t }),
-                )),
-          ),
-        )
+      let body
+      if (tab === 'overview') {
+        body = h(OverviewView, { t, data, stats, tickets, sourceHealth, enabledSources, busySession, onStatPick: pickStat, onOpenSession: openSession, onCompactNow: compactNow, onDeleteSingle: deleteSingle })
+      } else if (tab === 'tickets') {
+        body = h(TicketsView, { t, tickets, filter, onFilter: setFilter, query, onQuery: setQuery, log, onCloseLog: () => setLog(null), onAct: act, onOpenSession: openSession, onShowLog: showLog })
+      } else if (tab === 'roles') {
+        body = h(RolesView, { t, roles: data?.roles ?? [], delegate: data?.delegate ?? null, onRemoveRole: removeRole })
+      } else if (tab === 'sources') {
+        body = h(SourcesView, { t, form, onField: setField, msg, error, onSave: save })
+      } else {
+        body = h(SettingsView, { t, form, onField: setField, msg, error, onSave: save })
       }
-
-      function matchFilter(ticket) {
-        if (filter !== 'all' && ticket.status !== filter) return false
-        if (!query.trim()) return true
-        const needle = query.trim().toLowerCase()
-        return ticket.id.toLowerCase().includes(needle) || String(ticket.title || '').toLowerCase().includes(needle)
-      }
-
-      function ticketsView() {
-        const list = tickets.filter(matchFilter)
-        return h('div', null,
-          h('div', { className: 'syh-chips' },
-            ['all', 'queued', 'running', 'waiting', 'done', 'failed'].map((key) => h('button', {
-              key,
-              className: `syh-chip ${filter === key ? 'active' : ''}`,
-              onClick: () => setFilter(key),
-            }, key === 'all' ? t('all') : t(key))),
-          ),
-          h('input', { className: 'syh-search', value: query, placeholder: t('search'), onChange: (event) => setQuery(event.target.value) }),
-          h('div', { className: 'syh-card' },
-            list.length === 0
-              ? h('div', { className: 'syh-empty' }, query ? t('noMatch') : t('noTickets'))
-              : h('table', { className: 'syh-table' },
-                  h('thead', null, h('tr', null,
-                    h('th', null, t('tickets')),
-                    h('th', null, t('source')),
-                    h('th', null, t('status')),
-                    h('th', null, t('attempts')),
-                    h('th', null, t('lastError')),
-                    h('th', null, t('actions')),
-                  )),
-                  h('tbody', null, list.map((ticket) => h('tr', { key: ticket.id },
-                    h('td', null,
-                      h('code', { style: { fontSize: 11 } }, ticket.id),
-                      h('div', { style: { fontSize: 12 } }, ticket.title || ''),
-                      ticket.question ? h('div', { className: 'syh-err', style: { fontSize: 11 } }, '？' + ticket.question) : null,
-                    ),
-                    h('td', null, h('span', { className: 'syh-muted' }, ticket.source)),
-                    h('td', null, h(Badge, { status: ticket.status, t })),
-                    h('td', null, String(ticket.attempts ?? 0)),
-                    h('td', null, ticket.lastError ? h('div', { className: 'syh-err' }, ticket.lastError) : h('span', { className: 'syh-muted' }, '—')),
-                    h('td', null,
-                      h('div', { style: { display: 'flex', gap: 5, flexWrap: 'wrap' } },
-                        ticket.status === 'failed' ? h('button', { className: 'syh-btn', onClick: () => act(ticket, 'retry') }, t('retry')) : null,
-                        (ticket.status === 'running' || ticket.status === 'waiting') ? h('button', { className: 'syh-btn syh-btn-danger', onClick: () => act(ticket, 'cancel') }, t('cancel')) : null,
-                        ticket.sessionId ? h('button', { className: 'syh-btn', onClick: () => openSession(ticket.sessionId) }, t('session')) : null,
-                        h('button', { className: 'syh-btn', onClick: () => showLog(ticket) }, t('log')),
-                      ),
-                    ),
-                  ))),
-                ),
-            log ? h('div', null,
-              h('div', { className: 'syh-row', style: { marginTop: 10 } },
-                h('strong', { style: { fontSize: 12 } }, log.id),
-                h('button', { className: 'syh-btn', onClick: () => setLog(null) }, t('closeLog')),
-              ),
-              h('pre', { className: 'syh-pre' }, (log.truncated ? '…（只显示最后 200 行）\n' : '') + log.text),
-            ) : null,
-          ),
-        )
-      }
-
-      function sourceCard(title, section, fields, extra) {
-        return h('div', { className: 'syh-src' },
-          h('div', { className: 'syh-src-head' }, title,
-            h(Check, { label: t('enabled'), checked: section.enabled, onChange: (v) => setField(`${section.key}.enabled`, v) }),
-            h(Check, { label: t('confirmWrites'), checked: section.confirmWrites, onChange: (v) => setField(`${section.key}.confirmWrites`, v) }),
-          ),
-          h('div', { className: 'syh-row' },
-            fields.map(([key, label]) => h(Field, { key, label }, h(TextInput, { value: section[key], onChange: (v) => setField(`${section.key}.${key}`, v) }))),
-          ),
-          extra ?? null,
-        )
-      }
-
-      function rolesView() {
-        const roles = data?.roles ?? []
-        const queue = data?.delegate ?? null
-        const meta = h('div', { className: 'syh-row', style: { marginBottom: 10 } },
-          queue ? h('span', { className: 'syh-muted', style: { fontSize: 12 } },
-            `${t('delegateLimit')} ${queue.limit} · ${t('delegateQueued')} ${queue.pending}`) : null,
-        )
-        return h('div', null,
-          meta,
-          h('div', { className: 'syh-card' },
-            roles.length === 0
-              ? h('div', { className: 'syh-empty' }, t('noRoles'))
-              : h('table', { className: 'syh-table' },
-                  h('thead', null, h('tr', null,
-                    h('th', null, t('roleName')),
-                    h('th', null, t('roleWorkspace')),
-                    h('th', null, t('status')),
-                    h('th', null, t('lastTask')),
-                    h('th', null, t('actions')),
-                  )),
-                  h('tbody', null, roles.filter((row) => row.role).map((row) => h('tr', { key: row.role },
-                    h('td', null,
-                      h('strong', null, row.role),
-                      h('div', { className: 'syh-muted', style: { fontSize: 11 } }, row.sessionId),
-                    ),
-                    h('td', null, h('span', { className: 'syh-muted' }, row.workspaceId || '—')),
-                    h('td', null, row.lastError
-                      ? h('span', { className: 'syh-err' }, row.lastError)
-                      : h('span', { className: row.running ? 'syh-dot running' : 'syh-dot done', style: { marginRight: 6 } }),
-                        h('span', { className: 'syh-muted' }, row.running ? t('running') : t(row.status === 'failed' ? 'failed' : 'stateOk'))),
-                    h('td', null, row.lastTaskAt ? new Date(row.lastTaskAt).toLocaleString() : '—'),
-                    h('td', null, h('button', {
-                      className: 'syh-btn syh-btn-danger',
-                      onClick: () => removeRole(row.role),
-                    }, t('removeRole'))),
-                  ))),
-                ),
-          ),
-        )
-      }
-
-      function sourcesView() {
-        if (!form) return h('div', { className: 'syh-empty' }, t('loadFailed'))
-        return h('div', { className: 'syh-card' },
-          h('h2', null, t('sourcesTab')),
-          sourceCard(t('github'), { ...form.github, key: 'github' }, [
-            ['repo', t('repo')], ['labels', t('labels')], ['authors', t('authors')], ['apiBase', t('apiBase')],
-          ], h('div', { className: 'syh-row' },
-            h(Field, { label: t('token') }, h(TextInput, { type: 'password', value: form.github.token, placeholder: form.github.hasToken ? t('tokenSet') : t('tokenUnset'), onChange: (v) => setField('github.token', v) })),
-          )),
-          sourceCard(t('feishu'), { ...form.feishu, key: 'feishu' }, [
-            ['appId', t('appId')], ['chatIds', t('chatIds')], ['authors', t('authors')],
-          ], h('div', { className: 'syh-row' },
-            h(Field, { label: t('appSecret') }, h(TextInput, { type: 'password', value: form.feishu.appSecret, placeholder: form.feishu.hasSecret ? t('tokenSet') : t('tokenUnset'), onChange: (v) => setField('feishu.appSecret', v) })),
-            h(Check, { label: t('requireMention'), checked: form.feishu.requireMention, onChange: (v) => setField('feishu.requireMention', v) }),
-          )),
-          h('div', { className: 'syh-src' },
-            h('div', { className: 'syh-src-head' }, t('qq'),
-              h(Check, { label: t('enabled'), checked: form.qq.enabled, onChange: (v) => setField('qq.enabled', v) }),
-              h(Field, { label: t('mode') }, h('select', { value: form.qq.mode, onChange: (e) => setField('qq.mode', e.target.value) },
-                h('option', { value: 'personal' }, t('personal')),
-                h('option', { value: 'official' }, t('official')),
-              )),
-              h(Check, { label: t('requireMention'), checked: form.qq.requireAt, onChange: (v) => setField('qq.requireAt', v) }),
-              h(Check, { label: t('confirmWrites'), checked: form.qq.confirmWrites, onChange: (v) => setField('qq.confirmWrites', v) }),
-            ),
-            h('div', { className: 'syh-row' },
-              h(Field, { label: t('qqSenders') }, h(TextInput, { value: form.qq.authors, onChange: (v) => setField('qq.authors', v) })),
-              h(Field, { label: t('qqTargets') }, h(TextInput, { value: form.qq.allowedGroups, onChange: (v) => setField('qq.allowedGroups', v) })),
-            ),
-            form.qq.mode === 'personal'
-              ? h('div', { className: 'syh-row' },
-                  h(Field, { label: t('httpUrl') }, h(TextInput, { value: form.qq.personal.httpUrl, onChange: (v) => setField('qq.personal.httpUrl', v) })),
-                  h(Field, { label: t('wsUrl') }, h(TextInput, { value: form.qq.personal.wsUrl, onChange: (v) => setField('qq.personal.wsUrl', v) })),
-                  h(Field, { label: t('selfId') }, h(TextInput, { value: form.qq.personal.selfId, onChange: (v) => setField('qq.personal.selfId', v) })),
-                )
-              : h('div', { className: 'syh-row' },
-                  h(Field, { label: t('host') }, h(TextInput, { value: form.qq.official.host, onChange: (v) => setField('qq.official.host', v) })),
-                  h(Field, { label: t('port') }, h(TextInput, { type: 'number', value: form.qq.official.port, onChange: (v) => setField('qq.official.port', v) })),
-                  h(Field, { label: t('token') }, h(TextInput, { type: 'password', value: form.qq.official.token, placeholder: form.qq.official.hasToken ? t('tokenSet') : t('tokenUnset'), onChange: (v) => setField('qq.official.token', v) })),
-                ),
-          ),
-          saveBar(),
-        )
-      }
-
-      function settingsView() {
-        if (!form) return h('div', { className: 'syh-empty' }, t('loadFailed'))
-        const s = form.single
-        return h('div', null,
-          h('div', { className: 'syh-card' },
-            h('h2', null, t('basic')),
-            h('div', { className: 'syh-row' },
-              h(Check, { label: t('dryRun'), checked: form.dryRun, onChange: (v) => setField('dryRun', v) }),
-              h(Field, { label: t('mainSession') }, h(TextInput, { value: form.mainSessionId, onChange: (v) => setField('mainSessionId', v) })),
-              h(Field, { label: t('repoPath') }, h(TextInput, { value: form.repoPath, onChange: (v) => setField('repoPath', v) })),
-              h(Field, { label: t('poll') }, h(TextInput, { type: 'number', value: form.pollIntervalMs, onChange: (v) => setField('pollIntervalMs', v) })),
-              h(Field, { label: t('preset') }, h(TextInput, { value: form.workerPreset, onChange: (v) => setField('workerPreset', v) })),
-            ),
-          ),
-          h('div', { className: 'syh-card' },
-            h('h2', null, t('singleTitle')),
-            h('div', { className: 'syh-muted', style: { fontSize: 12, marginBottom: 10 } }, t('singleHint')),
-            h('div', { className: 'syh-row' },
-              h(Check, { label: t('singleEnabled'), checked: s.enabled, onChange: (v) => setField('single.enabled', v) }),
-              h(Check, { label: t('aggressive'), checked: s.aggressive, onChange: (v) => setField('single.aggressive', v) }),
-            ),
-            h('div', { className: 'syh-row' },
-              h(Field, { label: t('idleMinutes') }, h(TextInput, { type: 'number', value: s.idleMinutes, onChange: (v) => setField('single.idleMinutes', v) })),
-              h(Field, { label: t('pressureRatio') }, h(TextInput, { type: 'number', value: s.pressureRatio, onChange: (v) => setField('single.pressureRatio', v) })),
-              h(Field, { label: t('keepRecentTurns') }, h(TextInput, { type: 'number', value: s.keepRecentTurns, onChange: (v) => setField('single.keepRecentTurns', v) })),
-              h(Field, { label: t('sessionIdPrefix') }, h(TextInput, { value: s.sessionIdPrefix, onChange: (v) => setField('single.sessionIdPrefix', v) })),
-              h(Field, { label: t('singlePreset') }, h(TextInput, { value: s.preset, onChange: (v) => setField('single.preset', v) })),
-            ),
-          ),
-          saveBar(),
-        )
-      }
-
-      function saveBar() {
-        return h('div', { className: 'syh-savebar' },
-          h('button', { className: 'syh-btn syh-btn-primary', onClick: save, disabled: !form }, t('save')),
-          msg ? h('span', { className: `syh-msg ${error ? 'syh-msgerr' : ''}` }, msg) : null,
-          error ? h('span', { className: 'syh-msg syh-msgerr' }, error) : null,
-        )
-      }
-
-      const body = tab === 'overview' ? overview() : tab === 'tickets' ? ticketsView() : tab === 'roles' ? rolesView() : tab === 'sources' ? sourcesView() : settingsView()
 
       return h('div', { className: `syh-root ${compact ? 'syh-compact' : ''}` },
         h('style', null, CSS),
         h('div', { className: compact ? '' : 'syh-wrap' },
-          header,
-          errorBox,
-          h('div', { className: 'syh-tabs' }, visibleTabs.map((key) => h('button', {
-            key,
-            className: `syh-tab ${tab === key ? 'active' : ''}`,
-            onClick: () => setTab(key),
-          }, t(key === 'tickets' ? 'ticketsTab' : key === 'sources' ? 'sourcesTab' : key === 'settings' ? 'settingsTab' : 'overview')))),
+          h(ConsoleHeader, {
+            t,
+            data,
+            compact,
+            singleBusy,
+            onToggleSingle: toggleSingle,
+            onRefresh: reload,
+            onOpenRight: openRight,
+            onOpenConsole: openConsole,
+            onClose: () => onClose?.(),
+          }),
+          h(ErrorBanner, { t, loadError, error }),
+          h(TabsBar, { t, tabs: visibleTabs, tab, onSelect: setTab }),
           body,
           compact ? h('div', { className: 'syh-muted', style: { fontSize: 11, marginTop: 8 } }, t('closeHint')) : null,
         ),
@@ -998,7 +1042,7 @@ window.__ModuleLoader__.load({
     return {
       inject: ['slots', 'layout', 'locale'],
       // D9 测试缝：只读暴露纯函数与数据层入口，不参与渲染。
-      __internals: { createConsoleStore, filterTicketsForSession, buildForm, formPayload, DICT },
+      __internals: { createConsoleStore, filterTicketsForSession, buildForm, formPayload, DICT, TABS, TAB_LABELS },
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh: DICT.zh, en: DICT.en }))
 

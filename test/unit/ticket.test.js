@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createTicket, canTransition, markRunning, markDone, markFailed, markWaiting, safeSessionId, ticketStats, hourlyCount, threadCoolingDown } from '../../lib/ticket.js'
+import { createTicket, canTransition, markRunning, markDone, markFailed, markWaiting, safeSessionId, ticketStats, hourlyCount, threadCoolingDown, pruneTickets, isRelayedTerminal } from '../../lib/ticket.js'
 
 const trigger = {
   id: 'issue-1',
@@ -76,3 +76,35 @@ test('同源同线程冷却窗口内返回既有工单', () => {
   assert.equal(threadCoolingDown(tickets, 'feishu', 'issue-1', 60_000, now), null)
   assert.equal(threadCoolingDown(tickets, 'github', 'issue-1', 0, now), null)
 })
+
+test('pruneTickets：只裁已 relay 的终态到最近 20 条；未终态与未 relay 不裁', () => {
+  const tickets = {}
+  // 25 条已 relay 终态，updatedAt 递增（1..25）。
+  for (let i = 0; i < 25; i += 1) {
+    const terminal = i % 2 === 0 ? 'done' : 'failed'
+    tickets[`old-${i}`] = {
+      id: `old-${i}`,
+      status: terminal,
+      updatedAt: i + 1,
+      relayed: { [terminal]: { at: i + 1, delivered: true } },
+    }
+  }
+  // 2 条未终态：无论多老都不裁。
+  tickets['active-running'] = { id: 'active-running', status: 'running', updatedAt: 0, relayed: {} }
+  tickets['active-waiting'] = { id: 'active-waiting', status: 'waiting', updatedAt: 0, relayed: {} }
+  // 1 条终态但还没 relay：绝不能裁（裁了就丢回写）。
+  tickets['pending-relay'] = { id: 'pending-relay', status: 'done', updatedAt: 0, relayed: {} }
+  assert.equal(isRelayedTerminal(tickets['pending-relay']), false)
+
+  const out = pruneTickets({ tickets }, { keepTerminal: 20 })
+  assert.equal(out.removed, 5)
+  assert.equal(out.kept, 20)
+  assert.equal(Object.keys(tickets).length, 23, '裁剪后 = 20 已 relay 终态 + 2 未终态 + 1 未 relay')
+  assert.ok(tickets['active-running'])
+  assert.ok(tickets['active-waiting'])
+  assert.ok(tickets['pending-relay'], '未 relay 的终态必须保留')
+  // 最近 20 条（updatedAt 6..25）保留，最老的 5 条被裁。
+  for (let i = 0; i < 5; i += 1) assert.equal(tickets[`old-${i}`], undefined)
+  for (let i = 5; i < 25; i += 1) assert.ok(tickets[`old-${i}`], `old-${i} 应保留`)
+})
+

@@ -36,17 +36,18 @@ window.__ModuleLoader__.load({
         workspace: '工作空间', wsPath: '目录', wsSession: '接单会话', wsPressure: '上下文占用',
         wsLastCompact: '上次压缩', wsNever: '还没压缩过', wsMissing: '无接单会话', wsRunning: '运行中',
         compactNow: '立即压缩', compacting: '压缩中…', compactOk: '已压缩', compactSkip: '宿主判断无需压缩',
+        deleteSingle: '删除单会话', deleteSingleConfirm: '删除这个工作区的单会话登记？（当前会话不会被结束）', deleteSingleDone: '已删除单会话登记',
         noWorkspace: '还没有登记单会话的工作区。在某个工作区新建会话，点亮输入区的「超级智能体」胶囊即可。',
         singleTitle: '单会话模式', singleHint: '每个工作空间只保留一个接单会话；空闲或上下文超阈值时自动压缩旧上下文。worker 仍每工单独立。',
         singleEnabled: '启用单会话模式', idleMinutes: '空闲多少分钟后压缩', pressureRatio: '上下文占用超过此比例也压缩',
-        aggressive: '超级压缩（只保留最近几轮）', keepRecentTurns: '超级压缩保留最近几轮', autoCreate: '没有接单会话时自动创建',
+        aggressive: '超级压缩（只保留最近几轮）', keepRecentTurns: '超级压缩保留最近几轮',
         sessionIdPrefix: '会话 id 前缀', singlePreset: '单会话 preset（默认纯调度 dsh-superagent-yh-dispatcher）',
         recent: '最近活动', sourceHealth: '源健康', noSources: '还没有启用任何源。',
         stateOk: '正常', stateFail: '异常', watermark: '水位', added: '本轮新增',
         confirmCompact: '压缩可能消耗一次模型调用，确定现在压缩？',
         boardTitle: 'Superagent 工单', boardRunning: '进行中 {count}', boardPending: '待处理 {count}', boardTotal: '共 {count}',
         capsule: '单会话', capsuleOn: '单会话已开：各工作区的接单会话已顶置', capsuleOff: '单会话已关：已取消顶置',
-        pill: '超级智能体', pillTip: '点亮：把本会话设为本工作区的单会话', pillOnTip: '本工作区已登记这个单会话；删除请到控制台', pillNoWorkspace: '这个会话还没有工作区归属，点亮会失败；先在工作区里新建会话',
+        pill: '超级智能体', pillTip: '点亮：把本会话设为本工作区的单会话', pillNoWorkspace: '这个会话还没有工作区归属，点亮会失败；先在工作区里新建会话',
       },
       en: {
         title: 'Superagent console',
@@ -73,17 +74,18 @@ window.__ModuleLoader__.load({
         workspace: 'Workspace', wsPath: 'Path', wsSession: 'Intake session', wsPressure: 'Context usage',
         wsLastCompact: 'Last compact', wsNever: 'never', wsMissing: 'no intake session', wsRunning: 'running',
         compactNow: 'Compact now', compacting: 'Compacting…', compactOk: 'Compacted', compactSkip: 'Host says nothing to compact',
+        deleteSingle: 'Delete single session', deleteSingleConfirm: 'Remove the single-session registration of this workspace? (This session stays open.)', deleteSingleDone: 'Single-session registration removed',
         noWorkspace: 'No workspace has a registered single session yet. Create a session in a workspace and turn on the "Superagent" pill in its input area.',
         singleTitle: 'Single-session mode', singleHint: 'Each workspace keeps one intake session; old context is compacted when idle or over the threshold. Workers stay per-ticket.',
         singleEnabled: 'Enable single-session mode', idleMinutes: 'Compact after idle (minutes)', pressureRatio: 'Compact when context usage exceeds',
-        aggressive: 'Aggressive (keep only recent turns)', keepRecentTurns: 'Turns to keep when aggressive', autoCreate: 'Create an intake session when missing',
+        aggressive: 'Aggressive (keep only recent turns)', keepRecentTurns: 'Turns to keep when aggressive',
         sessionIdPrefix: 'Session id prefix', singlePreset: 'Single-session preset (default: dsh-superagent-yh-dispatcher)',
         recent: 'Recent activity', sourceHealth: 'Source health', noSources: 'No source enabled yet.',
         stateOk: 'OK', stateFail: 'Error', watermark: 'Watermark', added: 'Added',
         confirmCompact: 'Compacting may cost one model call. Compact now?',
         boardTitle: 'Superagent tickets', boardRunning: '{count} running', boardPending: '{count} queued', boardTotal: '{count} total',
         capsule: 'Single session', capsuleOn: 'Single session on: intake sessions pinned to the top', capsuleOff: 'Single session off: pins removed',
-        pill: 'Superagent', pillTip: 'Turn on: make this session the single session of this workspace', pillOnTip: 'Registered as this workspace single session; delete from the console', pillNoWorkspace: 'This session has no workspace yet; create it inside a workspace first',
+        pill: 'Superagent', pillTip: 'Turn on: make this session the single session of this workspace', pillNoWorkspace: 'This session has no workspace yet; create it inside a workspace first',
       },
     }
 
@@ -152,7 +154,6 @@ window.__ModuleLoader__.load({
           pressureRatio: String(singleSession?.pressureRatio ?? 0.5),
           aggressive: singleSession?.aggressive === true,
           keepRecentTurns: String(singleSession?.keepRecentTurns ?? 2),
-          autoCreate: singleSession?.autoCreate !== false,
           sessionIdPrefix: singleSession?.sessionIdPrefix || 'intake',
           preset: singleSession?.preset || 'dsh-superagent-yh-dispatcher',
         },
@@ -172,7 +173,6 @@ window.__ModuleLoader__.load({
           pressureRatio: Number(form.single.pressureRatio) || 0.5,
           aggressive: form.single.aggressive,
           keepRecentTurns: Number(form.single.keepRecentTurns) || 0,
-          autoCreate: form.single.autoCreate,
           sessionIdPrefix: form.single.sessionIdPrefix,
           preset: form.single.preset,
         },
@@ -281,8 +281,6 @@ window.__ModuleLoader__.load({
 .sysi{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
 .sysi:hover:not(:disabled){background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
 .sysi:disabled{cursor:default;opacity:.7}
-.sysi.on{color:var(--dsw-alias-brand-primary)}
-.sysi.on:hover{background:color-mix(in srgb,var(--dsw-alias-brand-primary) 12%,transparent)}
 `
 
     function SuperagentGlyph({ size = 16 }) {
@@ -328,15 +326,16 @@ window.__ModuleLoader__.load({
       }
       if (state && (!state.ok || state.enabled !== true)) return null
       if (state && !state.registered && state.workspaceOccupied) return null
-      const on = state?.registered === true
-      const title = state ? (on ? t('pillOnTip') : state.workspaceId ? t('pillTip') : t('pillNoWorkspace')) : t('pill')
+      // 登记成功后入口消失：本工作区已有唯一的单会话，不再给第二个入口。
+      if (state?.registered === true) return null
+      const title = state ? (state.workspaceId ? t('pillTip') : t('pillNoWorkspace')) : t('pill')
       return h('button', {
         type: 'button',
-        className: `sysi ${on ? 'on' : ''}`,
-        disabled: on || busy || !sessionId,
+        className: 'sysi',
+        disabled: busy || !sessionId,
         title,
         'aria-label': t('pill'),
-        onClick: on ? undefined : turnOn,
+        onClick: turnOn,
       }, h('style', null, PILL_CSS), h(SuperagentGlyph, null))
     }
 
@@ -381,7 +380,11 @@ window.__ModuleLoader__.load({
         const timer = setInterval(load, 5000)
         return () => { alive = false; clearInterval(timer) }
       }, [sessionId])
-      const visible = tickets.slice(-8).reverse()
+      // 未终态（queued/running/waiting）全部显示；done/failed 只补最近几条，总数最多 20。
+      const ordered = [...tickets].reverse()
+      const active = ordered.filter((item) => item.status !== 'done' && item.status !== 'failed').slice(0, 20)
+      const finished = ordered.filter((item) => item.status === 'done' || item.status === 'failed').slice(0, Math.max(0, 20 - active.length))
+      const visible = [...active, ...finished]
       if (visible.length === 0) return null
       const running = tickets.filter((item) => item.status === 'running').length
       const pending = tickets.filter((item) => item.status === 'queued').length
@@ -720,7 +723,7 @@ window.__ModuleLoader__.load({
                 h('option', { value: 'personal' }, t('personal')),
                 h('option', { value: 'official' }, t('official')),
               )),
-              h(Check, { label: t('requireAt'), checked: form.qq.requireAt, onChange: (v) => setField('qq.requireAt', v) }),
+              h(Check, { label: t('requireMention'), checked: form.qq.requireAt, onChange: (v) => setField('qq.requireAt', v) }),
               h(Check, { label: t('confirmWrites'), checked: form.qq.confirmWrites, onChange: (v) => setField('qq.confirmWrites', v) }),
             ),
             h('div', { className: 'syh-row' },
@@ -762,7 +765,6 @@ window.__ModuleLoader__.load({
             h('div', { className: 'syh-muted', style: { fontSize: 12, marginBottom: 10 } }, t('singleHint')),
             h('div', { className: 'syh-row' },
               h(Check, { label: t('singleEnabled'), checked: s.enabled, onChange: (v) => setField('single.enabled', v) }),
-              h(Check, { label: t('autoCreate'), checked: s.autoCreate, onChange: (v) => setField('single.autoCreate', v) }),
               h(Check, { label: t('aggressive'), checked: s.aggressive, onChange: (v) => setField('single.aggressive', v) }),
             ),
             h('div', { className: 'syh-row' },

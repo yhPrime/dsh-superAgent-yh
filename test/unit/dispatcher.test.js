@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { apply, inject, name } from '../../lib/dispatcher.js'
+import { registerDiagnostics } from '../../lib/diagnostics.js'
 
 function harness({ tools, keep, definitionsError, restrictError } = {}) {
   const calls = { restrict: [], warn: [], info: [] }
@@ -67,6 +68,24 @@ test('dispatcher：没有可隐藏的工具时不调用 restrict', () => {
   const h = harness({ tools: [{ name: 'run_code' }] })
   apply(h.ctx, h.config)
   assert.equal(h.calls.restrict.length, 0)
+})
+
+test('dispatcher：完全没收敛（denied 为空）也要留下可查 warn', () => {
+  const h = harness({ tools: [{ name: 'run_code' }] })
+  const seen = []
+  const off = registerDiagnostics((entry) => seen.push(entry))
+  try {
+    assert.doesNotThrow(() => apply(h.ctx, h.config))
+  } finally {
+    off()
+  }
+  assert.equal(h.calls.restrict.length, 0)
+  assert.equal(h.calls.warn.length, 1)
+  assert.match(String(h.calls.warn[0][0]), /no global tool to hide/)
+  assert.equal(seen.length, 1)
+  assert.equal(seen[0].level, 'warn')
+  assert.equal(seen[0].message, String(h.calls.warn[0][0]))
+  assert.match(seen[0].message, /^dispatcher: /)
 })
 
 test('dispatcher：整批被拒时逐个重试，能藏的都藏上', () => {

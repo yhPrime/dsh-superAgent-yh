@@ -62,7 +62,13 @@ function harness({ single = true, assessmentOut = { verdict: 'accept' }, targetO
   }
   const executor = createExecutor({
     ctx, config, store,
-    relay: { send: async (tk, kind) => { calls.relay.push(kind) } },
+    relay: {
+      send: async (tk, kind) => {
+        calls.relay.push(kind)
+        tk.relayed ??= {}
+        tk.relayed[kind] = { at: Date.now(), delivered: true }
+      },
+    },
     redact: (x) => x, log: () => {},
     sources: { qq: { send: async (thread, text) => { calls.notify.push(text) } } },
     assessment: { assess: async () => assessmentOut },
@@ -119,6 +125,22 @@ test('单会话关闭：回退顶层 worker 会话路径', async () => {
   // 没有 ticket_report 的 wait → failed 且写明未回报
   assert.equal(out.status, 'failed')
   assert.match(h.store.state.tickets[h.ticket.id].lastError, /未调用 ticket_report/)
+})
+
+test('终态 relay 之后才裁工单：已 relay 终态留 20 条，未 relay 的终态保留', async () => {
+  const h = harness()
+  for (let i = 0; i < 25; i += 1) {
+    h.store.state.tickets[`old-${i}`] = {
+      id: `old-${i}`, status: 'done', updatedAt: i, relayed: { done: { at: i, delivered: true } },
+    }
+  }
+  h.store.state.tickets['pending-relay'] = { id: 'pending-relay', status: 'done', updatedAt: 999, relayed: {} }
+  const out = await h.executor.runTicket(h.ticket.id)
+  assert.equal(out.status, 'done')
+  assert.equal(Object.keys(h.store.state.tickets).length, 21, '20 已 relay 终态（含当前工单）+ 1 未 relay')
+  assert.ok(h.store.state.tickets['pending-relay'])
+  assert.ok(h.store.state.tickets[h.ticket.id])
+  for (let i = 0; i < 6; i += 1) assert.equal(h.store.state.tickets[`old-${i}`], undefined)
 })
 
 test('目标会话不可用：不派工', async () => {

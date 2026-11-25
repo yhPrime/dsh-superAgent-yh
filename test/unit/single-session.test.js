@@ -1,6 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { slugOf, intakeIdOf, shouldCompact, regionEndOf, createSingleSessionMaintainer } from '../../lib/single-session.js'
+import {
+  slugOf, intakeIdOf, shouldCompact, regionEndOf, createSingleSessionMaintainer,
+  truncateUtf8, singleSessionTitle, guardSessionActivity, SINGLE_SESSION_TITLE_SUFFIX,
+} from '../../lib/single-session.js'
 import { normalizeConfig } from '../../lib/config.js'
 
 const base = { running: false, queued: false, pendingInput: false, idleForMs: 0, pressureTokens: 0, contextWindow: 1000, idleMinutes: 30, pressureRatio: 0.5 }
@@ -28,35 +31,58 @@ test('regionEndOf：保留最近 N 轮', () => {
   assert.equal(regionEndOf(records, 4), null)
 })
 
-function harness({ enabled = true, sessions = [{ sessionId: 's1', workspaceId: 'w1', cwd: 'C:/repo' }], workspaces = [{ id: 'w1', path: 'C:/repo', title: 'repo' }], state = { running: false, queue: [], pendingInput: [], cursor: 7 }, pressure = { pressureTokens: 100, contextWindow: 1000 }, blank = true, selectError = null, config: configPatch = {} } = {}) {
-  const calls = { pin: 0, unpin: 0, archive: 0, compact: 0, selected: [] }
+function harness({
+  enabled = true, sessions = [{ sessionId: 's1', workspaceId: 'w1', cwd: 'C:/repo' }],
+  workspaces = [{ id: 'w1', path: 'C:/repo', title: 'repo' }],
+  state = { running: false, queue: [], pendingInput: [], cursor: 7 },
+  pressure = { pressureTokens: 100, contextWindow: 1000 }, blank = true,
+  selectError = null, selectSequence = [], pinError = null, renameError = null,
+  agentAlive = true, config: configPatch = {},
+  renameNormalize = (title) => title, renameNoReturn = false,
+} = {}) {
+  const calls = { pin: 0, unpin: 0, archive: 0, compact: 0, selected: [], rename: 0, titles: [], accepted: [] }
   const store = { state: { singleSessions: {}, singleSession: {}, lastError: null }, save() {} }
   const config = normalizeConfig({ ...configPatch, singleSession: { enabled, idleMinutes: 30, pressureRatio: 0.5, ...(configPatch.singleSession ?? {}) } })
   const agent = { session: {} }
+  let selectCalls = 0
   const maintainer = createSingleSessionMaintainer({
     ctx: {}, config, store, log: () => {}, redact: (x) => x,
     deps: {
       listWorkspaces: () => workspaces,
       listSessions: async () => sessions,
       getState: async () => state,
-      getAgent: () => agent,
+      getAgent: () => (agentAlive ? agent : null),
       getPressure: () => pressure,
       getCompaction: () => ({ compactNow: async () => { calls.compact += 1; return { ok: true } }, compactRegion: async () => ({ ok: true }) }),
       readEvents: async () => [],
-      pinSession: async () => { calls.pin += 1 },
+      pinSession: async () => { if (pinError) throw new Error(pinError); calls.pin += 1 },
       unpinSession: async () => { calls.unpin += 1 },
       archiveSession: async () => { calls.archive += 1 },
       resolveByPath: async () => workspaces[0],
       resolveAgent: async () => ({ agent }),
       presetOf: () => 'standard',
       isBlank: () => blank,
+      renameSession: async ({ sessionId, title }) => {
+        if (renameError) throw new Error(renameError)
+        calls.rename += 1
+        calls.titles.push(title)
+        const accepted = renameNormalize(title)
+        calls.accepted.push(accepted)
+        const summary = sessions.find((item) => item.sessionId === sessionId)
+        if (summary) summary.title = accepted
+        if (renameNoReturn) return undefined
+        return { title: accepted, seq: calls.rename }
+      },
       selectPreset: async (_a, preset) => {
-        if (selectError) throw new Error(selectError)
+        const step = selectSequence[selectCalls]
+        selectCalls += 1
+        if (step instanceof Error) throw step
+        if (step === undefined && selectError) throw new Error(selectError)
         calls.selected.push(preset)
       },
     },
   })
-  return { maintainer, store, calls, config }
+  return { maintainer, store, calls, config, sessions, workspaces }
 }
 
 test('register：未开启 / 会话不存在 / 无工作区 / 工作区已占用 都拒绝', async () => {
@@ -207,4 +233,165 @@ test('onPresetSelected：未登记/同 preset 不动；空会话被改回默认 
   const skip = await started.maintainer.onPresetSelected('s1', 'ptc')
   assert.equal(skip.ignored, 'started')
   assert.deepEqual(started.calls.selected, [])
+})
+
+test('标题：59 字节按 UTF-8 安全截断，不切半个中文', () => {
+  assert.equal(SINGLE_SESSION_TITLE_SUFFIX, '超级智能体团队')
+  // 59 是工作空间名部分的字节上限；多字节字符只能整字保留：19 个中文 = 57 字节。
+  assert.equal(truncateUtf8('中'.repeat(20), 59), '中'.repeat(19))
+  assert.equal(Buffer.byteLength(truncateUtf8('中'.repeat(20), 59), 'utf8'), 57)
+  assert.equal(truncateUtf8('abc', 59), 'abc')
+  assert.equal(truncateUtf8('', 59), '')
+  assert.equal(singleSessionTitle('repo'), `repo${SINGLE_SESSION_TITLE_SUFFIX}`)
+  assert.equal(singleSessionTitle('中'.repeat(20)), `${'中'.repeat(19)}${SINGLE_SESSION_TITLE_SUFFIX}`)
+  assert.equal(singleSessionTitle(null), SINGLE_SESSION_TITLE_SUFFIX)
+})
+
+test('register：标题固定为「工作空间名+超级智能体团队」，canonical 写进 state', async () => {
+  const h = harness()
+  await h.maintainer.register('s1')
+  const expected = `repo${SINGLE_SESSION_TITLE_SUFFIX}`
+  assert.equal(h.store.state.singleSessionTitles.w1, expected)
+  assert.equal(h.calls.rename, 1)
+  assert.deepEqual(h.calls.titles, [expected])
+  assert.equal(h.sessions[0].title, expected)
+})
+
+test('register：改名失败只记日志，不撤销登记', async () => {
+  const h = harness({ renameError: 'rename boom' })
+  const out = await h.maintainer.register('s1')
+  assert.equal(out.workspaceId, 'w1')
+  assert.equal(h.store.state.singleSessions.w1, 's1')
+  assert.equal(h.calls.rename, 0)
+})
+
+test('maintain：标题被改回时对账重写；会话不活着时不 rename', async () => {
+  const live = harness()
+  await live.maintainer.register('s1')
+  const canonical = `repo${SINGLE_SESSION_TITLE_SUFFIX}`
+  live.sessions[0].title = 'drifted'
+  live.calls.rename = 0
+  await live.maintainer.maintain()
+  assert.equal(live.calls.rename, 1)
+  assert.equal(live.calls.titles[0], canonical)
+  assert.equal(live.sessions[0].title, canonical)
+
+  // 再次 maintain 不应重复 rename（写前比对）。
+  live.calls.rename = 0
+  await live.maintainer.maintain()
+  assert.equal(live.calls.rename, 0)
+
+  const cold = harness({ agentAlive: false })
+  await cold.maintainer.register('s1')
+  cold.sessions[0].title = 'drifted'
+  cold.calls.rename = 0
+  await cold.maintainer.maintain()
+  assert.equal(cold.calls.rename, 0, '冷会话不 resume、不改名')
+})
+
+test('register：canonical 用 rename 返回值（宿主按 72 字节截断），下一轮 maintain 不再 rename', async () => {
+  const longName = '工作空间'.repeat(12) // 48 个汉字 = 144 字节，必被宿主截断
+  const truncateToBytes = (text, maxBytes) => {
+    let out = ''
+    let used = 0
+    for (const char of text) {
+      const size = Buffer.byteLength(char, 'utf8')
+      if (used + size > maxBytes) break
+      out += char
+      used += size
+    }
+    return out
+  }
+  const h = harness({
+    workspaces: [{ id: 'w1', path: 'C:/repo', title: longName }],
+    renameNormalize: (title) => truncateToBytes(title, 72),
+  })
+  await h.maintainer.register('s1')
+  const accepted = h.calls.accepted[0]
+  assert.ok(Buffer.byteLength(accepted, 'utf8') <= 72)
+  assert.notEqual(accepted, h.calls.titles[0], '宿主返回的标题应 ≠ 传入值')
+  assert.equal(h.store.state.singleSessionTitles.w1, accepted, 'canonical 必须是宿主返回值')
+  assert.equal(h.sessions[0].title, accepted)
+
+  // 第二轮：canonical 已等于宿主落下的标题，不该再 rename（否则就是 60s 风暴）。
+  h.calls.rename = 0
+  await h.maintainer.maintain()
+  assert.equal(h.calls.rename, 0, 'canonical 来自返回值时第二轮不得重复 rename')
+  assert.equal(h.store.state.singleSessionTitles.w1, accepted)
+})
+
+test('maintain：旧 canonical 被宿主截断时以返回值为准，且只记一次、下一轮不再 rename', async () => {
+  const longName = '工作空间'.repeat(12)
+  const truncateToBytes = (text, maxBytes) => {
+    let out = ''
+    let used = 0
+    for (const char of text) {
+      const size = Buffer.byteLength(char, 'utf8')
+      if (used + size > maxBytes) break
+      out += char
+      used += size
+    }
+    return out
+  }
+  const h = harness({
+    workspaces: [{ id: 'w1', path: 'C:/repo', title: longName }],
+    renameNormalize: (title) => truncateToBytes(title, 72),
+  })
+  // 模拟旧 state：canonical 是自己算的（未经宿主规范化），会话标题也被改坏。
+  const selfTitle = singleSessionTitle(longName)
+  h.store.state.singleSessions.w1 = 's1'
+  h.store.state.singleSessionTitles = { w1: selfTitle }
+  h.sessions[0].title = 'drifted'
+  h.calls.rename = 0
+  await h.maintainer.maintain()
+  assert.equal(h.calls.rename, 1)
+  const accepted = h.calls.accepted[0]
+  assert.notEqual(accepted, selfTitle)
+  assert.equal(h.store.state.singleSessionTitles.w1, accepted, 'maintain 也要回写返回值')
+
+  h.calls.rename = 0
+  await h.maintainer.maintain()
+  assert.equal(h.calls.rename, 0, '返回值的 canonical 不应每轮触发 rename 风暴')
+})
+
+test('register：renameSession 没有返回值时回落用自算标题', async () => {
+  const h = harness({ renameNoReturn: true })
+  await h.maintainer.register('s1')
+  assert.equal(h.store.state.singleSessionTitles.w1, `repo${SINGLE_SESSION_TITLE_SUFFIX}`)
+})
+
+test('register：pin 失败回滚登记并报 pin-failed', async () => {
+  const h = harness({ pinError: 'pin boom' })
+  await assert.rejects(() => h.maintainer.register('s1'), (e) => e.code === 'pin-failed')
+  assert.equal(h.store.state.singleSessions.w1, undefined)
+  assert.equal(h.calls.unpin, 1)
+})
+
+test('unregister：preset 恢复失败重试一次；仍失败则留下可读状态', async () => {
+  const retry = harness({ selectSequence: ['ok', new Error('first fail'), 'ok'] })
+  await retry.maintainer.register('s1')
+  await retry.maintainer.unregister('s1')
+  assert.deepEqual(retry.calls.selected, ['dsh-superagent-yh-dispatcher', 'standard'])
+  assert.equal(retry.store.state.singleSessionPrevPreset.w1, undefined)
+  assert.equal(retry.store.state.singleSessionRestore?.w1, undefined)
+
+  const broken = harness({ selectSequence: ['ok', new Error('boom1'), new Error('boom2')] })
+  await broken.maintainer.register('s1')
+  await broken.maintainer.unregister('s1')
+  assert.equal(broken.store.state.singleSessionPrevPreset.w1, 'standard', '恢复失败时保留原 preset 记录')
+  assert.equal(broken.store.state.singleSessionRestore.w1.ok, false)
+  assert.match(broken.store.state.lastError, /preset 未恢复/)
+})
+
+test('guardSessionActivity：已登记会话上报活动阻断入档；删除中/未登记放行', async () => {
+  const h = harness()
+  const next = async () => [{ kind: 'message' }]
+  assert.deepEqual(await guardSessionActivity(h.maintainer, { sessionId: 's1' }, next), [{ kind: 'message' }])
+  await h.maintainer.register('s1')
+  assert.deepEqual(await guardSessionActivity(h.maintainer, { sessionId: 's1' }, next), [{ kind: 'turn' }, { kind: 'message' }])
+  // 未登记的会话原样放行。
+  assert.deepEqual(await guardSessionActivity(h.maintainer, { sessionId: 'other' }, next), [{ kind: 'message' }])
+  // 控制台删除中放行，否则 removeSingle 归档会被自己的活动上报挡住。
+  const deleting = { isRegistered: () => true, isDeleting: () => true }
+  assert.deepEqual(await guardSessionActivity(deleting, { sessionId: 's1' }, next), [{ kind: 'message' }])
 })

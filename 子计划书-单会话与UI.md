@@ -1,8 +1,8 @@
 # 子计划书 · 单会话（会话内智能体团队）+ UI
 
-> 版本：v2.12｜状态：**定稿（2026-11-25 用户拍板 A：直派子智能体纳管为工单，前提「必须是真工单」）**｜定稿日期：2026-11-25｜权威范围：单会话的会话内界面 + 控制台 UI + 后端守卫收口 + 直派子会话的纳管/清理；不改源协议、不改主线 relay
+> 版本：v2.13｜状态：**定稿**｜定稿日期：2026-11-26｜权威范围：单会话的会话内界面 + 控制台 UI + 后端守卫收口 + 直派子会话的纳管/清理 + **执行面三层根因修复（工具面收敛 D47 / 压缩通路 D48 / unknown 子会话终态 D49）**；不改源协议、不改主线 relay；实施目标版本 0.9.5
 >
-> 唯一权威。两份草案（`docs/草案-控制台重构-v0.1.md`、`docs/草案-单会话UI重构-v0.1.md`）并入本版后仅存档。版本槽：v2.10（纯调度 preset / D30）→ v2.11（会话内 UI）→ **v2.12（本版，直派子会话纳管）**。
+> 唯一权威。两份草案（`docs/草案-控制台重构-v0.1.md`、`docs/草案-单会话UI重构-v0.1.md`）并入本版后仅存档。版本槽：v2.10（纯调度 preset / D30）→ v2.11（会话内 UI）→ v2.12（直派子会话纳管 / D40）→ **v2.13（本版，执行面根因修复 D47–D50；已定稿）**。
 
 ## 1 继承与变更说明
 
@@ -23,7 +23,15 @@
 3. 噪音与用过的子会话都在空闲 `singleSession.childIdleMinutes`（默认 2）后 `archiveSession(id,{stopActivity:true})` 归档；失败按 3 次 + 10 分钟窗口退避，写 `lastError`，不阻塞主流程。
 4. 开关 `singleSession.adoptChildren`（默认 true）；已登记工作区状态里出现 `children:{adopted,cleaned,total}` 便于验收。
 
-**正式修订记录（v2.10 原文 → v2.11）**
+**v2.13 改了什么（D47–D50，已定稿）**
+
+1. dispatcher 工具面改为「deny 快照 + `tools/change` 增量重放」，放行集 keep 扩为调度面 + 压缩/上下文基础设施共 8 个（D47）；**否决**静态 allow 白名单。
+2. 压缩引擎改由 preset 内新增的桥行 `compaction-bridge` 提供，不再依赖 `agentPresets.serviceFor`（D48）。
+3. unknown 子会话改为「有限重试 + 转人工清单终态」，`/status` 暴露 `unknownChildren`（D49）。
+4. 文档口径一次改清（D50）：E12.20 按 D47 重述并提升进正文，新增 E12.24–E12.26。
+5. 本版只改文档，代码保持 0.9.4；`package.json` 版本不动，实施时再升 0.9.5。
+
+**正式修订记录（v2.10 原文 → v2.11；R7 为本版追加）**
 
 | # | v2.10 原文（定位） | v2.11 修订 | 原因 |
 |---|---|---|---|
@@ -33,6 +41,7 @@
 | R4 | §2.13 旧注释「切到极简 preset（v2.9 / D28）」 | 订正为 dispatcher（D30） | 注释与代码不符 |
 | R5 | v2.11 未涉及直派子会话 | 新增 D40：直派子会话纳管为工单 / 非工单空闲归档 | 实测 26 个子会话挂着没人清，用户拍板 A |
 | R6 | 工单只来自源 | 工单可由单会话直派子会话生成（`source=subagent`） | 与 D14「worker=子智能体」对齐，避免两套执行语义 |
+| **R7** | v2.12 未涉及工具面时序、压缩服务获取、unknown 终态 | 新增 D47–D50：工具面黑名单+增量重放、compaction 桥行、unknown 有限重试、文档口径一次改清；**影响验收项**：E12.20 重述，新增 E12.24–E12.26 | 0.9.4 真机只读分析定位三个真缺陷（§13.1）；编号 R5 已被 D40 占用，故用 R7；2026-11-26 用户授权按最佳方案实施（原话：你来定要最佳方案） |
 
 ## 2 现状与证据
 
@@ -40,7 +49,7 @@
 - **任务板** `client.js:362`：5s 轮询 `/status?sessionId=`，取 `slice(-8)`，空则 `return null`。
 - **控制台** `client.js:411` 起：四页签 overview/tickets/sources/settings；`autoCreate` 原在表单与 payload（M1 移除）；侧栏 `Icon` 自绘 SVG、未接 primitives。
 - **服务端** `lib/single-session.js`：`register` 97-157（码 `not-enabled/workspace-occupied/started/no-agent/no-workspace/preset-failed`）、`pinSession` 失败只 log（假登记）、`unregister` 160-191（会话已开始只 log `preset restore skipped`）、`removeSingle` 194-206、`maintain` 290-334（失败写 `state.lastError`）。
-- **dispatcher** `lib/dispatcher.js`：成功打 `dispatcher: hid N global tool(s)`；四类失败只 `ctx.logger.warn`，不写 `state.lastError`、不落插件日志。
+- **dispatcher** `lib/dispatcher.js`：成功打 `dispatcher: hid N global tool(s)`；四类失败只 `ctx.logger.warn`，不写 `state.lastError`、不落插件日志。**（历史问题：已被 D37 取代，现行见附录 A、§13.1 P1 与 D47）**
 - **钩子** `lib/index.js:117-125`：archive/pin 逻辑内联在 `child.on('workspace/session-activity')`，不可单测；`sessionController` 已在 `inject`（22 行）。
 - **宿主事实**（asar 实测）：`rename` 内部 `resolveAgent` → `sessionTitle.rename`，返回 `{title: accepted.title}`；标题被 `cleanTitleText` 规范化并按 `maxTitleBytes` 截断；会话不 live 会失败。
 - **工作树**：`git status` 已有 v2.11 主体实现（`client.js`、`lib/{dispatcher,index,single-session,store}.js`、两个测试已 M；新增 `lib/diagnostics.js`、`test/unit/client-dict.test.js`）。基线 `c5ac0ea`，**未 commit**。实施按第 7 章验收，已落地项只核对不重写。
@@ -49,7 +58,7 @@
 
 **目标**：G1 会话内界面（图标登记后消失、标题固定且自愈、任务板有上限）；G2 后端失败可见可测；G3 控制台给出分阶段方案（本批不做）；G4 发 0.8.1 补丁、文档口径一致。
 
-**非目标**：不做控制台重构本身（第 6 章后置）；不收敛三套 5s 轮询（D35）；不改源协议/relay；不动 profile 白名单；不删旧 `intake-*`。
+**非目标**：不做控制台重构本身（第 6 章后置）；不收敛三套 5s 轮询（D35）；不改源协议/relay；不动 profile 白名单；不删旧 `intake-*`。**v2.13 追加非目标**：不采用 dispatcher 静态 allow 白名单（本宿主 `restrict`/`restrictableNames` 实测前不可用，理由见 D47）；不改宿主 asar；不改 `childAddressOf`（0.9.4 已正确）；不动源协议/relay/UI。
 
 ## 4 冲突裁决表（已定，不给选项）
 
@@ -67,6 +76,9 @@
 | 验收日志 | `dispatcher:` 行走 `ctx.logger`，**不在** `single-session.log`；验收看插件日志（`logs/dispatcher.log`）+ `header.tools` | D39 |
 | 直派子会话 | 真工单纳管进 `state.tickets`（`source=subagent`）；噪音不建工单；两类空闲 2 分钟归档（`stopActivity:true`）；开关 `singleSession.adoptChildren` | D40 / §5.6 |
 | 版本号 | **0.8.2**（补丁级：直派子会话纳管 + 清理）；发布 `dist/dsh-superagent-yh-0.8.2.tgz` | D40 / M7 |
+| 工具面（v2.13） | 保留 deny 快照立即收敛 + `tools/change` 增量重放；keep = 调度面 + 压缩/上下文基础设施（8 个）；否决静态 allow 白名单 | D47 / §13.2 |
+| 压缩引擎来源（v2.13） | preset 内桥行 `compaction-bridge` 注入 `ctx.compaction`；`serviceFor` 只作兜底 | D48 / §13.2 |
+| unknown 子会话（v2.13） | 有限重试（8 次 / 约 6h）→ 转人工清单终态，不再无限调度 | D49 / §13.2 |
 
 ## 5 单会话生命周期
 
@@ -210,7 +222,7 @@ E12.23：新发一条任务 → 子会话被 `started` 汇报，完成后 `done`
 1. 登记后宿主 UI 的「入档/删除」是否真被 `workspace/session-activity` 挡住（D26-5 只能真机证）。
 2. 侧栏/会话列表标题是否正确显示，长工作空间名是否 59 字节截断且后缀完整。
 3. 发首轮消息后 LLM/宿主标题生成器是否不再覆盖标题。
-4. 单会话 `header.tools` 是否只剩 `subagent`（无 `ops_bash`/`exp_recall`/shell/fs）。
+4. 单会话 `header.tools` 是否恰为 **preset own + 明确 allowlist**——`delegate`、`superagent_status` + `compress`/`decompress`/`search_context`/`acp_status`/`acp_cache`/`acp_read_original_image`；且不含 `ops_bash`/`exp_recall`/shell/fs/`mnemon_*`/`cyrene_*`/`team_task_*`/`sidebar_open`（E12.20 已按 D47 重述；M9 报告「只剩 subagent」为过期口径）。
 5. worker 会话工具面不受影响（bash/fs 可用）。
 6. 直派子会话：发任务后任务板出现 `subagent:*` 行；子会话结束后被归档（`single-session.log` 有 `archived child ... (idle)`）。
 
@@ -267,3 +279,96 @@ E12.23：新发一条任务 → 子会话被 `started` 汇报，完成后 `done`
 12. §5.6 / D40：直派子会话纳管（`source=subagent`），真工单才登记，噪音与用过的空闲 2 分钟归档。
 13. D40 版本 0.8.2；开关 `singleSession.adoptChildren`、`singleSession.childIdleMinutes`。
 12. 文档：本版唯一权威，两份草案归档。
+
+## 13 v2.13 执行面根因修复（D47–D50，实施目标 0.9.5）
+
+> 本版只做「只读根因分析 → 决策落纸」，不改代码；0.9.4 已上线行为不倒退。**所有验收项需重启 DSH 加载 0.9.5 后验**。`package.json` 本版不动（仍 0.9.4），实施 0.9.5 时才升版本。
+
+### 13.1 问题（2026-11-26 只读分析结论，含证据行号）
+
+**P1 dispatcher 工具守卫只覆盖 apply 时刻的全局工具。** `lib/dispatcher.js:31-35` 在 apply 时取 `ctx.tools.definitions()` 快照，`:47` 一次性 `restrict({ deny: names })`；宿主 `@deepseek-ai/dsh-tools/lib/index.js:394` 的 `admits(name)` 只按 filter 里已有名字判定，`:454-468` restrict 用 `restrictableNames` 校验后 append，`:478-507` view(scope) 里 own 注册豁免、restrictions 只压 inherited。因此 `compress`/`acp_*`/`mnemon_*`/`sidebar_open` 这些「manifest 就绪后异步注册到 global 层」的工具（`billion-context/dist/agent/dsh-native.js` 的 beginToolsOwner；`dsh-mnemon/lib/index.js:17831-17843`；`dsh-better-sidebar/lib/index.js:5269`）晚于快照，直接可见。真机证据：`session-fb2c5059…/session.v4.jsonl.zstd` seq 789/844 的 `request/header.tools` 恰 31 个，不含 shell/fs/ops_bash/exp_*（说明 apply 时已存在的都被挡住了），但含 compress/acp_*/mnemon_*/sidebar_open；seq 15（0.8.0）只有 1 个 `subagent`。scope 语义无问题（`dsh-agent-preset-registry/lib/index.js:687` `parent: bindScopeParent(...)` 把 agent scope 挂成 preset 子级）。
+
+**P2 单会话 preset 取不到 compaction。** `lib/single-session.js:142` `getCompaction: ctx.agentPresets?.serviceFor?.(agent,'compaction') ?? null`，`:422-423` 无引擎即抛「这个会话的 preset 没有挂 compaction 服务，无法压缩」，`:434` `engine.compactNow(...)`。宿主 `agentPresets.serviceFor` 在全 asar 里只有 7 处调用、全在 registry 自身，**零宿主调用者、零自测**，对 dispatcher preset 返回 undefined。服务名与组语法均正确（`dsh-compaction/lib/index.js:170-172` `super(ctx,"compaction")`；`dsh-web-app/presets/standard.patch.yml` 的 compaction 组与 `cordis.patch.yml:116-132` 逐字相同）。宿主自有路径能压成功：`dsh-command-compact/lib/index.js:10` `inject=["commands","compaction"]`、`:56` `ctx.compaction.compactNow(...)`。真机日志 `C:\Users\yh\.dsh\state\dsh-superagent-yh\logs\single-session.log` 有 28 条 compact failed、0 条成功。测试 `test/unit/single-session.test.js:69` 用假 `getCompaction` 注掉了真路径，零覆盖。
+
+**P3 unknown 子会话永不终态。** `lib/single-session.js:515-534`：`:526` `wait = Math.min(10*60_000, 60_000*attempts)`，`:532` 打「读不到事件，先不动（第 N 次）」，无 maxAttempts、无终态，成功才 `:536 delete`。不是地址错（0.9.4 已改对 `childAddressOf`）：日志「读取失败」0 条、「读不到事件」165 条；宿主 `dsh-api-session-controller/lib/index.js:1245-1276` 任何真实失败都抛异常，0 条「读取失败」⟹ 没抛错、只是**空页** `{cursor:-1, records:[]}`（`:1286-1315` paginate 从 cut=0 起；`dsh-session-query/lib/index.js:514-520` `cursor: seq===0 ? -1 : seq-1`）。磁盘上这些子会话确实有事件（离线解压同工作区 35 个子会话：`6b6c4dd1 ev=1047`、`e900aaec ev=690`、`0435dad9 ev=707`、`d644a8c3 ev=213`，header origin=subagent、parent=session-fb2c5059-…，与 `childAddressOf` 同源）。`lib/child-tickets.js:49-58` unknown 唯一触发条件就是 `events.length===0`。
+
+### 13.2 决策
+
+#### D47 dispatcher 工具面：黑名单 + 注册事件增量重放
+
+**决定**：保留 apply 时的 deny 快照做立即收敛，再订阅 `tools/change` 对「快照之后才注册的全局工具」做增量重放；放行集 keep 固定为 `delegate, superagent_status, compress, decompress, search_context, acp_status, acp_cache, acp_read_original_image`。**否决**静态 allow 白名单。
+
+**理由**（三条硬约束，写死不再议）：
+1. `restrict` 对 allow 里的名字也做 `restrictableNames` 校验——静态写全名单会在工具尚未注册时抛 `tools.restrict() names unknown global tool`。
+2. 多个 allow filter 求交，重放 allow 只会越收越窄（第二次重放把第一次的放行也压掉）。
+3. `delegate`/`superagent_status` 是 preset 内 own 注册、不在 `restrictableNames` 里，写进 allow 直接抛错。
+
+**实施要点**：
+- `lib/dispatcher.js` 保留现有 deny 快照 + 批量/逐个重试；新增 `ctx.effect(() => ctx.root.on('tools/change', denyNow))` 做增量重放（**必须 `ctx.root.on`**，`ctx.on` 收不到父级事件）；`ctx.effect` 保证 preset 卸载时回收监听。
+- `applied` Set 记录已 restrict 的名字去重，防「新增 restriction 又触发 tools/change」死循环；每次重放只 deny 新出现的名字，日志累计 `dispatcher: hid N global tool(s)`。
+- keep 理由：单会话要把 worker 长输出收进上下文，没有 `compress`/`decompress`/`search_context` 会爆上下文；`acp_*` 是读图/压缩账本基础设施；`mnemon_*`/`cyrene_*`/`team_task_*`/`sidebar_open` 纯调度会话用不上，继续 deny。
+- `cordis.patch.yml:133-139` 的 `keep` 同步为上述 8 个。
+- **改写 E12.20 口径**：从「只剩调度 / 只出现 subagent」改为「工具面 = preset own + 明确 allowlist（调度面 + 压缩/上下文基础设施）」，并标注 `docs/M9-v2.10-报告.md:49` 原文已过期；`§8` 人工清单第 4 条同步（已改）。
+
+**验收判据**：会话 `session.v4.jsonl.zstd` 最后一个 `request/header.tools` 恰等于 keep ∪ preset-own；日志出现 `dispatcher: hid N global tool(s)` 且 N 随异步注册增长（同一会话内 N 不再停在 31 个旧快照值）。
+
+**风险与回滚**：风险＝监听漏接（非 `ctx.root.on`）、重放死循环（无 `applied` 去重）、卸载后残留 restriction（未用 `ctx.effect`）。回滚＝`git checkout -- lib/dispatcher.js cordis.patch.yml`；行为退回「只挡 apply 时已存在的工具」，不会比 0.9.4 更差。
+
+#### D48 compaction 改由 preset 内桥行提供
+
+**决定**：新增 `lib/compaction-bridge.js`，作为 preset 内与 compaction 组同 realm 的一行插件，把 `ctx.compaction` 注册进模块级 Map；单会话按 preset id 取引擎，`agentPresets.serviceFor` 只作兜底。**否决**继续依赖 `serviceFor`（零宿主调用者、零自测、对 dispatcher preset 返回 undefined），也不改宿主。
+
+**实施要点**：
+- `lib/compaction-bridge.js`：`export const inject=['compaction']`；`apply` 里 `registerCompactionEngine(cfg?.preset, ctx.compaction)`；模块级 `Map` + `ctx.effect(() => unregister...)` 注销。
+- `cordis.patch.yml` 的 worker 组（80-96）与 dispatcher 组（116-132）各加一行 `name: dsh-superagent-yh/compaction-bridge` + `config: { preset: <preset id> }`；桥行必须与 compaction 组同 `cordis:group` realm，否则 `ctx.compaction` 取不到。
+- `package.json` `exports` 加 `"./compaction-bridge": "./lib/compaction-bridge.js"`。
+- `lib/single-session.js:142` 改为先按 `agentPresets.presetForSession` 查注册表，查不到再退 `serviceFor`；仍无引擎则抛 no-compaction，但**每会话只告警一次**（现每轮刷）。
+- 测试：补一条「引擎由 preset 提供」的集成断言，删掉 `test/unit/single-session.test.js:69` 的假引擎。
+
+**验收判据**：24h 内 no-compaction 归零、`single-session.log` 出现 `compact ok session-…`；`/status` 的 lastCompact 显示 `afterTokens < beforeTokens`；连点两次手动压缩，第二次应是 busy/skip 而非 no-compaction。
+
+**风险与回滚**：风险＝桥行 realm 放错取不到服务、preset id 写错导致 Map 键不一致。回滚＝删 `lib/compaction-bridge.js` + 回滚 `cordis.patch.yml`/`package.json`/`single-session.js`；退回 0.9.4 的 serviceFor 路径（表现为压缩不可用，但不影响派活）。
+
+#### D49 unknown 子会话「有限重试 + 人工清单终态」
+
+**决定**：给 unknown 加 `maxAttempts`（8 次，60s×1…8 ≈ 6h），超限写终态并转人工清单，不再无限调度；`superagent_status` / `/status` 暴露 `unknownChildren`。
+
+**实施要点**：
+- `lib/single-session.js:522-534` 加 `maxAttempts`；超限写 `{terminal:true, at, attempts}`、`wait` 置空不再调度、打一条「转人工清单（第 N 次）」。
+- `superagent_status` / `/status` 暴露 `unknownChildren` 列表（会话 id、标题、首次/末次时间、累计次数）。
+- 空页时一次性记录诊断三元组：`page?.cursor`、`records.length`、list item 的 `running`，加 `sessionController.state({sessionId})` 的 eventCount，用于判定空页是 live（seq===0）还是冷读。
+- **明确：不再去改 `childAddressOf`**——0 条「读取失败」已证明地址与父归属都对；空页是宿主观测层缺口，模块只读条件下只能留证据升级。**0.9.4 状态说明**：`childAddressOf` 已修对，剩余空读是宿主 events 返回空页，避免下轮又去改地址。
+
+**验收判据**：24h 内「读不到事件」总次数 ≤ 现有 unknown 数 ×8，且出现「转人工清单」；state 里每条 attempts ≤8、不再无限增长。
+
+**风险与回滚**：风险＝把「暂时读不到」误判终态（8 次≈6h 已足够宽）；`/status` 字段增量不影响旧客户端。回滚＝`git checkout -- lib/single-session.js`，退回无限退避（0.9.4 行为）。
+
+#### D50 文档一致性一次改清
+
+**决定**：本版把下列口径一次性对齐，不留「文档说 A、代码做 B」。
+- `子计划书` L43（0.8.0「四类失败只 warn 不写日志」）标注为历史、已被 D37 取代（已加注）。
+- L66 / L251 的现行口径保留（D37/D39，不改）。
+- `§8` 人工清单第 4 条按 D47 改写（已改）。
+- E12.20 从 `docs/M9-v2.10-报告.md:49` 提升进正文，按 D47 重述（见 §13.4），M9 原文标过期。
+- `docs/M11-编排-报告.md:89` 自认「E12.20 未验」的表述与新口径对齐（只改这一处口径说明，不重写报告）。
+- **本轮边界**：本次只落盘两份权威文档（本计划书 + `项目信息.md`），M9/M11 报告的单行标注随 0.9.5 实施一并改，避免本轮动第三、四份文件（见交接「待确认」）。
+
+**验收判据**：全文搜 `只剩 subagent`/`未验` 只出现在明确标注「过期/历史」的上下文；M9/M11 实施时核对无残留旧口径。
+
+**风险与回滚**：纯文档；回滚＝`git checkout -- 子计划书-单会话与UI.md docs/M9-v2.10-报告.md docs/M11-编排-报告.md`。
+
+### 13.3 执行顺序
+
+**D47 → D48 → D49 → D50**。D47 风险最低、验收最直接（读 `header.tools` 即可判定），先做；D48 依赖 preset 结构与 exports，改动面次之；D49 只动维护器状态机与状态暴露，需真机观察 24h；D50 收尾，把口径与报告对齐。**非目标**：allow 白名单方案在本宿主实测前不可用；不改宿主；不改 `childAddressOf`；不动源协议/relay/UI。
+
+### 13.4 本版验收项（需重启 DSH 加载 0.9.5 后验）
+
+**E12.24（D47 工具面）**：单会话发一轮任务后，取其 `session.v4.jsonl.zstd` 最后一个 `request/header.tools`，断言集合 = preset own ∪ {delegate, superagent_status, compress, decompress, search_context, acp_status, acp_cache, acp_read_original_image}；断言不含 `ops_bash`/`exp_recall`/shell/fs/`mnemon_*`/`cyrene_*`/`team_task_*`/`sidebar_open`。同时 `logs/dispatcher.log`（或插件日志）出现 `dispatcher: hid N global tool(s)`，且新异步工具注册后 N 增大。
+
+**E12.25（D48 压缩通路）**：重启后连续 24h，`C:\Users\yh\.dsh\state\dsh-superagent-yh\logs\single-session.log` 中 `compact ok` ≥1 且无新增 `compact failed (no-compaction)`；`/status` 的 `lastCompact.afterTokens < beforeTokens`；连点两次手动压缩，第二次返回 busy/skip 而非 no-compaction。
+
+**E12.26（D49 unknown 终态）**：重启后 24h，日志中「读不到事件」总次数 ≤ 重启前 unknown 数 ×8；出现至少一条「转人工清单（第 N 次）」；`/status.unknownChildren` 可列出会话 id/标题/首末时间/次数；`state.json` 中每条 unknown 记录 `attempts ≤ 8` 且不再变化。
+
+**E12.20（重述）**：会话 `header.tools` 满足 E12.24 的集合口径（旧的「只剩 subagent」不再作为判据；M9 报告原文标过期）。
+
+> 版本与打包：本版 `package.json` 保持 `0.9.4`（代码未改，避免假版本号）；0.9.5 实施时再升版本并 `npm pack` 出 `dist/dsh-superagent-yh-0.9.5.tgz`。

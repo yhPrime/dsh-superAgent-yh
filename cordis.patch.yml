@@ -94,6 +94,11 @@
                   thresholdChars: 8192
                   headChars: 4096
                   tailChars: 1024
+              # D48：把本组隔离 realm 里的 compaction 服务按 preset 登记给单会话维护器。
+              - id: compaction-bridge
+                name: dsh-superagent-yh/compaction-bridge
+                config:
+                  preset: dsh-superagent-yh-worker
     # 单会话「纯调度」preset（D30）：只留调度 persona、派活工具和压缩；
     # dispatcher 守卫把 profile 级全局工具（ops_bash/exp_recall 等）在本会话隐藏。
     - id: dsh-superagent-yh-dispatcher-preset
@@ -130,6 +135,11 @@
                   thresholdChars: 8192
                   headChars: 4096
                   tailChars: 1024
+              # D48：dispatcher preset 也要按 preset 登记自己的 compaction 服务。
+              - id: compaction-bridge
+                name: dsh-superagent-yh/compaction-bridge
+                config:
+                  preset: dsh-superagent-yh-dispatcher
           # 派活工具 `delegate` 由插件全局注册；守卫必须放行它，只藏其余全局工具。
           - id: dispatcher-guard
             name: dsh-superagent-yh/dispatcher
@@ -137,3 +147,9 @@
               keep:
                 - delegate
                 - superagent_status
+                - compress
+                - decompress
+                - search_context
+                - acp_status
+                - acp_cache
+                - acp_read_original_image

@@ -5,11 +5,24 @@ import { apply, inject, name } from '../../lib/dispatcher.js'
 import { registerDiagnostics } from '../../lib/diagnostics.js'
 
 function harness({ tools, keep, definitionsError, restrictError } = {}) {
-  const calls = { restrict: [], warn: [], info: [] }
+  const calls = { restrict: [], warn: [], info: [], changeListeners: [] }
+  const toolList = tools ?? [
+    { name: 'ops_bash' },
+    { name: 'exp_recall' },
+    { name: 'cycle_search' },
+    { name: 'run_code' },
+    { name: 42 },
+  ]
   const ctx = {
     logger: {
       warn: (...args) => calls.warn.push(args),
       info: (...args) => calls.info.push(args),
+    },
+    root: {
+      on: (event, listener) => {
+        if (event === 'tools/change') calls.changeListeners.push(listener)
+        return () => {}
+      },
     },
     effect: (fn) => {
       const dispose = fn()
@@ -18,13 +31,7 @@ function harness({ tools, keep, definitionsError, restrictError } = {}) {
     tools: {
       definitions: () => {
         if (definitionsError) throw new Error(definitionsError)
-        return tools ?? [
-          { name: 'ops_bash' },
-          { name: 'exp_recall' },
-          { name: 'cycle_search' },
-          { name: 'run_code' },
-          { name: 42 },
-        ]
+        return toolList
       },
       restrict: (filter) => {
         if (restrictError) throw new Error(restrictError)
@@ -107,6 +114,37 @@ test('dispatcher：整批被拒时逐个重试，能藏的都藏上', () => {
   }
   assert.doesNotThrow(() => apply(ctx, {}))
   assert.deepEqual(calls, [{ deny: ['ops_bash'] }, { deny: ['exp_recall'] }])
+})
+
+test('dispatcher：apply 之后异步注册的工具由 tools/change 增量补齐', () => {
+  const tools = [{ name: 'ops_bash' }]
+  const h = harness({ tools, keep: ['delegate'] })
+  apply(h.ctx, h.config)
+  assert.equal(h.calls.changeListeners.length, 1)
+  assert.equal(h.calls.restrict.length, 1)
+  tools.push({ name: 'compress' }, { name: 'delegate' })
+  for (const listener of h.calls.changeListeners) listener('tools/change')
+  assert.deepEqual(h.calls.restrict[1], { deny: ['compress'] })
+  // 新增 restriction 本身会再次触发 tools/change：必须去重，不能无限 deny。
+  for (const listener of h.calls.changeListeners) listener('tools/change')
+  assert.equal(h.calls.restrict.length, 2)
+  assert.equal(h.calls.info.at(-1)[1], 2)
+  assert.match(String(h.calls.info.at(-1)[0]), /global tool\(s\) after/)
+})
+
+test('dispatcher：重放时单个工具失败只 warn，不阻断其余工具', () => {
+  const tools = [{ name: 'ops_bash' }]
+  const h = harness({ tools })
+  apply(h.ctx, h.config)
+  tools.push({ name: 'compress' }, { name: 'search_context' })
+  const realRestrict = h.ctx.tools.restrict
+  h.ctx.tools.restrict = (filter) => {
+    if (filter.deny.includes('compress')) throw new Error('bad tool')
+    return realRestrict(filter)
+  }
+  for (const listener of h.calls.changeListeners) listener('tools/change')
+  assert.deepEqual(h.calls.restrict.at(-1), { deny: ['search_context'] })
+  assert.match(String(h.calls.warn.at(-1)[0]), /could not hide 1\/2 new global tool/)
 })
 
 test('dispatcher：模块名与注入契约', () => {

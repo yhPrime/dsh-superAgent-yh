@@ -1,12 +1,13 @@
 {
   "name": "dsh-superagent-yh",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "private": true,
   "description": "dsh-superAgent-yh 自制版：每个工单在独立会话与独立目录执行，主线只收三条短消息。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
     "./dispatcher": "./lib/dispatcher.js",
+    "./compaction-bridge": "./lib/compaction-bridge.js",
     ".": "./lib/index.js",
     "./client": "./client.js",
     "./locale/*.json": "./locale/*.json",

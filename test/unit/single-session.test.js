@@ -6,6 +6,7 @@ import {
   normalizeTitleText, sessionTitleOf, childAddressOf,
 } from '../../lib/single-session.js'
 import { normalizeConfig } from '../../lib/config.js'
+import { registerCompactionEngine } from '../../lib/compaction-bridge.js'
 
 const base = { running: false, queued: false, pendingInput: false, idleForMs: 0, pressureTokens: 0, contextWindow: 1000, idleMinutes: 30, pressureRatio: 0.5 }
 
@@ -41,8 +42,9 @@ function harness({
   agentAlive = true, config: configPatch = {},
   renameNormalize = (title) => title, renameNoReturn = false, applyRename = true,
   children = [], childRecords = {}, childArchiveError = null, childReadError = null,
+  presetId = 'standard', useRealCompaction = false, compactionEngine = null,
 } = {}) {
-  const calls = { pin: 0, unpin: 0, archive: 0, archiveChild: 0, compact: 0, selected: [], rename: 0, titles: [], accepted: [], relay: [], childReads: [] }
+  const calls = { pin: 0, unpin: 0, archive: 0, archiveChild: 0, compact: 0, selected: [], rename: 0, titles: [], accepted: [], relay: [], childReads: [], logs: [] }
   const store = { state: { singleSessions: {}, singleSession: {}, lastError: null }, save() {} }
   const config = normalizeConfig({ ...configPatch, singleSession: { enabled, idleMinutes: 30, pressureRatio: 0.5, ...(configPatch.singleSession ?? {}) } })
   const agent = { session: {} }
@@ -58,7 +60,7 @@ function harness({
     summary.projections.values.title = { ver: 1, seq: calls.rename, val: title }
   }
   const maintainer = createSingleSessionMaintainer({
-    ctx: {}, config, store, log: () => {}, redact: (x) => x,
+    ctx: {}, config, store, log: (ns, msg) => calls.logs.push(`${ns}: ${msg}`), redact: (x) => x,
     deps: {
       now: () => clock.now(),
       listWorkspaces: () => workspaces,
@@ -66,13 +68,13 @@ function harness({
       getState: async () => state,
       getAgent: () => (agentAlive ? agent : null),
       getPressure: () => pressure,
-      getCompaction: () => ({ compactNow: async () => { calls.compact += 1; return { ok: true } }, compactRegion: async () => ({ ok: true }) }),
+      ...(useRealCompaction ? {} : { getCompaction: () => compactionEngine ?? { compactNow: async () => { calls.compact += 1; return { ok: true } }, compactRegion: async () => ({ ok: true }) } }),
       readEvents: async (sessionId) => childRecords[sessionId] ?? [],
-      // v0.9.4：子会话必须走 subagent 地址，维护器统一从 readChildEvents 读。
-      readChildEvents: async (child) => {
+      // v0.9.4：子会话必须走 subagent 地址；D49 起整页（含 cursor）一起回给诊断。
+      readChildPage: async (child) => {
         calls.childReads.push(child)
         if (childReadError) throw new Error(childReadError)
-        return childRecords[child.sessionId] ?? []
+        return { records: childRecords[child.sessionId] ?? [], page: { cursor: 'p1' } }
       },
       pinSession: async () => { if (pinError) throw new Error(pinError); calls.pin += 1 },
       unpinSession: async () => { calls.unpin += 1 },
@@ -85,7 +87,7 @@ function harness({
       relay: { send: async (ticket, kind) => { calls.relay.push({ id: ticket.id, kind }) } },
       resolveByPath: async () => workspaces[0],
       resolveAgent: async () => ({ agent }),
-      presetOf: () => 'standard',
+      presetOf: () => presetId,
       isBlank: () => blank,
       renameSession: async ({ sessionId, title }) => {
         if (renameError) throw new Error(renameError)
@@ -209,6 +211,65 @@ test('maintain：无登记时不压缩；登记后按压力压缩；运行中不
   await busy.maintainer.register('s1')
   await busy.maintainer.maintain()
   assert.equal(busy.calls.compact, 0)
+})
+
+test('maintain：compaction 引擎由 preset 桥提供（D48）', async () => {
+  const engine = { compactNow: async () => ({ ok: true }), compactRegion: async () => ({ ok: true }) }
+  const off = registerCompactionEngine('dsh-superagent-yh-dispatcher', engine)
+  try {
+    const h = harness({
+      pressure: { pressureTokens: 900, contextWindow: 1000 },
+      presetId: 'dsh-superagent-yh-dispatcher',
+      useRealCompaction: true,
+    })
+    await h.maintainer.register('s1')
+    await h.maintainer.maintain()
+    assert.equal(h.store.state.singleSession.s1.beforeTokens, 900)
+    assert.equal(h.store.state.singleSession.s1.mode, 'compactNow')
+  } finally {
+    off()
+  }
+})
+
+test('maintain：没有 compaction 引擎时每会话只告警一次（D48）', async () => {
+  const h = harness({
+    pressure: { pressureTokens: 900, contextWindow: 1000 },
+    presetId: 'no-such-preset',
+    useRealCompaction: true,
+  })
+  await h.maintainer.register('s1')
+  await h.maintainer.maintain()
+  await h.maintainer.maintain()
+  assert.equal(h.calls.logs.filter((line) => /compact skipped/.test(line)).length, 1)
+  assert.equal(h.store.state.singleSession.s1, undefined)
+})
+
+test('子会话纳管：unknown 最多 8 次，到顶转人工清单并暴露 unknownChildren（D49）', async () => {
+  const ghost = { sessionId: 'c12', parentSessionId: 's1', origin: 'subagent', running: false, updatedAt: Date.now() - 5 * 60_000, title: '查不到' }
+  const h = harness({ children: [ghost], childRecords: { c12: [] } })
+  await h.maintainer.register('s1')
+  for (let i = 0; i < 8; i += 1) {
+    await h.maintainer.maintain()
+    const entry = h.store.state.singleSessionChildUnknown.c12
+    assert.equal(entry.attempts, i + 1)
+    if (i < 7) h.store.state.singleSessionChildUnknown.c12.at = Date.now() - 11 * 60_000
+  }
+  const entry = h.store.state.singleSessionChildUnknown.c12
+  assert.equal(entry.terminal, true)
+  assert.equal(entry.attempts, 8)
+  assert.equal(h.calls.logs.filter((line) => /转人工清单/.test(line)).length, 1)
+  // terminal 之后不再累加尝试次数。
+  await h.maintainer.maintain()
+  assert.equal(h.store.state.singleSessionChildUnknown.c12.attempts, 8)
+  const list = h.maintainer.unknownChildren()
+  assert.equal(list.length, 1)
+  assert.equal(list[0].sessionId, 'c12')
+  assert.equal(list[0].terminal, true)
+  assert.equal(list[0].attempts, 8)
+  assert.equal(list[0].diagnostics.cursor, 'p1')
+  assert.equal(list[0].diagnostics.records, 0)
+  assert.equal(list[0].diagnostics.running, false)
+  assert.equal(list[0].diagnostics.eventCount, null)
 })
 
 test('stateOf：未登记 / 已被别的会话占用', async () => {

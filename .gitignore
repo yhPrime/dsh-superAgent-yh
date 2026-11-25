@@ -1,3 +1,10 @@
 test/tmp/
 node_modules/
 dist/
+
+# 临时文件（2026-11-26 清理轮）
+_tmp/
+tmp-*.json
+*.tmp
+*.bak
+*.orig

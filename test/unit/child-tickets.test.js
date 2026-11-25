@@ -45,7 +45,9 @@ test('classifyChild：够长的任务且 label 像样 → 工单；太薄 → �
   assert.equal(classifyChild({ records: [userMessage(longer)], label: '空占位' }).ticket, true, '占位 label 时内容 ≥ 80 字符也认')
   assert.equal(classifyChild({ records: [userMessage(long)], label: '空占位' }).ticket, false, '占位 label + 仅 40 字符不认')
   assert.equal(classifyChild({ records: [userMessage('算一下 1+1')], label: '算一下' }).reason, 'too-thin')
-  assert.equal(classifyChild({ records: [], label: '空' }).reason, 'empty')
+  const unknown = classifyChild({ records: [], label: '空' })
+  assert.equal(unknown.reason, 'no-events')
+  assert.equal(unknown.unknown, true, '读不到事件不能当噪音')
 })
 
 test('childTicketDoc：字段与工单一致，带 childSessionId/targetSessionId', () => {

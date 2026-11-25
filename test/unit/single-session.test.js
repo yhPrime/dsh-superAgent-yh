@@ -440,14 +440,32 @@ test('子会话纳管：回声/占位 = 噪音，不建工单，空闲即归档'
   assert.equal(h.calls.relay.length, 0)
 })
 
+test('子会话纳管：读不到事件时不动、不归档（防止把真任务当噪音清掉）', async () => {
+  const ghost = { sessionId: 'c9', parentSessionId: 's1', origin: 'subagent', running: false, updatedAt: Date.now() - 5 * 60_000, title: '修标题' }
+  const h = harness({ children: [ghost], childRecords: { c9: [] } })
+  await h.maintainer.register('s1')
+  await h.maintainer.maintain()
+  assert.equal((h.store.state.tickets ?? {})['subagent:c9'], undefined)
+  assert.equal(h.calls.archiveChild, 0, '读不到事件不许归档')
+  assert.equal(h.store.state.singleSessionChildUnknown.c9 !== undefined, true)
+})
+
 test('子会话纳管：归档失败记 lastError、不抛；adoptChildren=false 时整段跳过', async () => {
   const echo = { sessionId: 'c3', parentSessionId: 's1', origin: 'subagent', running: false, updatedAt: Date.now() - 5 * 60_000, title: '空' }
-  const broken = harness({ children: [echo], childArchiveError: 'archive boom' })
+  const broken = harness({
+    children: [echo],
+    childArchiveError: 'archive boom',
+    childRecords: { c3: [{ event: { type: 'user/message', data: { content: [{ type: 'text', text: '只回复「ok」。' }] } } }] },
+  })
   await broken.maintainer.register('s1')
   await broken.maintainer.maintain()
   assert.match(broken.store.state.lastError, /子会话归档失败（c3）：archive boom/)
 
-  const off = harness({ children: [echo], config: { singleSession: { adoptChildren: false } } })
+  const off = harness({
+    children: [echo],
+    config: { singleSession: { adoptChildren: false } },
+    childRecords: { c3: [{ event: { type: 'user/message', data: { content: [{ type: 'text', text: '只回复「ok」。' }] } } }] },
+  })
   await off.maintainer.register('s1')
   await off.maintainer.maintain()
   assert.equal(off.calls.archiveChild, 0)

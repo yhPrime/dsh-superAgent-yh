@@ -675,3 +675,28 @@ test('子会话纳管：读取抛错时记日志、判 unknown、不归档', asy
   assert.ok(h.store.state.singleSessionChildUnknown.c11, '读失败要进 unknown 重试队列')
   assert.equal(h.calls.archiveChild, 0)
 })
+
+test('D51：maintain 批量归档超过 workerArchiveDays 的终态 worker，未超期/运行中/角色不动', async () => {
+  const now = Date.now()
+  const day = 86_400_000
+  const stale = { sessionId: 'cw-old', parentSessionId: 's1', origin: 'subagent', running: false, updatedAt: now - 4 * day }
+  const fresh = { sessionId: 'cw-new', parentSessionId: 's1', origin: 'subagent', running: false, updatedAt: now - 1 * day }
+  const running = { sessionId: 'cw-run', parentSessionId: 's1', origin: 'subagent', running: true, updatedAt: now - 4 * day }
+  const rolePrefixed = { sessionId: 'role-qa-1', parentSessionId: 's1', origin: 'subagent', running: false, updatedAt: now - 4 * day }
+  const registeredRole = { sessionId: 'cw-role', parentSessionId: 's1', origin: 'subagent', running: false, updatedAt: now - 4 * day }
+  const h = harness({ enabled: false, children: [stale, fresh, running, rolePrefixed, registeredRole] })
+  h.store.state.roles = { qa: 'cw-role' }
+  const result = await h.maintainer.maintain()
+  assert.deepEqual(h.calls.archivedChildren, ['cw-old'])
+  assert.equal(result.staleWorkers.total, 1)
+  assert.equal(result.staleWorkers.archived, 1)
+  assert.ok(h.calls.logs.some((line) => line.includes('purged stale workers: 1/1')))
+})
+
+test('D51：workerArchive:false 时 maintain 不做过期兜底', async () => {
+  const stale = { sessionId: 'cw-old', parentSessionId: 's1', origin: 'subagent', running: false, updatedAt: Date.now() - 4 * 86_400_000 }
+  const h = harness({ enabled: false, children: [stale], config: { singleSession: { workerArchive: false } } })
+  const result = await h.maintainer.maintain()
+  assert.deepEqual(h.calls.archivedChildren ?? [], [])
+  assert.equal(result.staleWorkers.archived, 0)
+})

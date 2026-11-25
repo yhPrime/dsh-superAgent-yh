@@ -1,8 +1,8 @@
 # 子计划书 · 单会话（会话内智能体团队）+ UI
 
-> 版本：v2.14｜状态：**定稿**｜定稿日期：2026-11-26｜权威范围：单会话的会话内界面 + 后端守卫收口 + 直派子会话的纳管/清理 + **执行面三层根因修复（工具面收敛 D47 / 压缩通路 D48 / unknown 子会话终态 D49）**；控制台阶段已移交独立计划书；不改源协议、不改主线 relay；实施目标版本 0.9.5
+> 版本：v2.15｜状态：**定稿**｜定稿日期：2026-11-26｜权威范围：单会话的会话内界面 + 后端守卫收口 + 直派子会话的纳管/清理 + **一次性子智能体会话的终态处置（D51）** + 执行面三层根因修复（D47 / D48 / D49）；控制台阶段已移交独立计划书；不改源协议、不改主线 relay；实施目标版本 0.9.6
 >
-> 唯一权威。两份草案（`docs/草案-控制台重构-v0.1.md`、`docs/草案-单会话UI重构-v0.1.md`）并入本版后仅存档。版本槽：v2.10（纯调度 preset / D30）→ v2.11（会话内 UI）→ v2.12（直派子会话纳管 / D40）→ v2.13（执行面根因修复 D47–D50）→ **v2.14（本版，控制台阶段移交；已定稿）**。
+> 唯一权威。两份草案（`docs/草案-控制台重构-v0.1.md`、`docs/草案-单会话UI重构-v0.1.md`）并入本版后仅存档。版本槽：v2.10（纯调度 preset / D30）→ v2.11（会话内 UI）→ v2.12（直派子会话纳管 / D40）→ v2.13（执行面根因修复 D47–D50）→ v2.14（控制台阶段移交）→ **v2.15（本版，D51 子智能体终态处置；已定稿）**。
 
 ## 1 继承与变更说明
 
@@ -44,6 +44,7 @@
 | **R7** | v2.12 未涉及工具面时序、压缩服务获取、unknown 终态 | 新增 D47–D50：工具面黑名单+增量重放、compaction 桥行、unknown 有限重试、文档口径一次改清；**影响验收项**：E12.20 重述，新增 E12.24–E12.26 | 0.9.4 真机只读分析定位三个真缺陷（§13.1）；编号 R5 已被 D40 占用，故用 R7；2026-11-26 用户授权按最佳方案实施（原话：你来定要最佳方案） |
 
 | **R8** | v2.13 含控制台阶段 §6（后置本批不做） | 控制台阶段移交独立计划书 v1.2：§6 只留指针，S0–S5 编号作废 | 用户拍板控制台计划书 v1.2 定稿，移交后单一权威 |
+| **R9** | v2.14 未涉及一次性子智能体会话的终态处置 | 新增 D51：delegate 派出的 worker 结算即归档 + 过期兜底；常驻角色会话永不自动归档（§14，E12.27） | 用户投诉界面「40 个子智能体」堆积；插件侧必须保证不再新增 active，归档软删可恢复 |
 
 ## 2 现状与证据
 
@@ -365,3 +366,33 @@ E12.23：新发一条任务 → 子会话被 `started` 汇报，完成后 `done`
 **E12.20（重述）**：会话 `header.tools` 满足 E12.24 的集合口径（旧的「只剩 subagent」不再作为判据；M9 报告原文标过期）。
 
 > 版本与打包：本版 `package.json` 保持 `0.9.4`（代码未改，避免假版本号）；0.9.5 实施时再升版本并 `npm pack` 出 `dist/dsh-superagent-yh-0.9.5.tgz`。
+
+## 14 D51 · 一次性子智能体会话的终态处置
+
+**决定（2026-11-26 用户拍板）**
+
+1. `delegate` 派出的 worker 在 `onChildSettled()` 时归档：`ctx.workspaceRegistry.archiveSession(childId, { stopActivity: true })`，复用 `lib/child-archive.js` 的「失败 3 次 / 10 分钟退避 + 写 `singleSessionChildArchive`」，日志 `archived child <id> (settled)`。
+2. 兜底：① 宿主 `subagent/end`（root scope）触发同一条结算路径；② `delegate` 每 3s 扫一次 inflight，发现 `running === false` 也按结算处理（防事件被 scope 过滤）；③ `single-session` 的 maintain 每轮批量归档「终态且 `updatedAt` 超过 `workerArchiveDays`（默认 3 天）」的子会话，日志 `purged stale workers: N/M`。
+3. 常驻角色会话永不自动归档：归档前断言 `origin === 'subagent' && parentSessionId`、id 不以 `role-` 开头、不在 `state.roles` 的值里；命中即跳过并打 `skip archive <id>` 告警。
+4. **不做「只隐藏」**：宿主 `subagentCatalog` 没有 hidden 语义，插件自绘盖住既脆弱又要跟宿主 UI 同步；本版只做归档（软删、可恢复）。
+5. **待反馈（非本版目标）**：向宿主提需求——`subagentCatalog` 需要 archived 过滤或 `subagent/catalog-removed` 事件。这是让界面「N 个子智能体」数字真正下降的唯一途径。
+
+**理由**：归档是软删（`dsh-workspace/lib/index.js:527-548` 只往 `archivedSessionIds` 加 id、不删磁盘；`:559-569` 可原样 `unarchiveSession`）；宿主没有 retention/gc，插件不兜底这批 worker 就永久 active；角色会话是 `sessionController.create` 建的顶层会话（无 `parentSessionId`、`origin !== 'subagent'`），结构上不会被本条判据误收。
+
+**明确「不做」**：本版**不会**让界面那行「N 个子智能体」数字下降。该计数来自宿主 `subagentCatalog` 投影（`dsh-subagent/src/list-children.ts` + `catalog.ts`），事件 schema 没有移除/归档过滤，归档也不降。本版只保证：① 不再新增 active worker；② 已归档会话可恢复。**下轮不要把「数字没降」当回归。**
+
+**实施要点**
+- `lib/delegate.js` 的 `onChildSettled()`（原 L183-186）归档；新增 `reapSettled()` 3s 兜底；`lib/index.js` 订 `ctx.root.on('subagent/end')`。
+- 复用 `lib/child-archive.js`（从 `single-session` 抽出）：3 次 / 10 分钟退避，写 `singleSessionChildArchive`，`lastError` 文案不变。
+- `lib/config.js` 的 `singleSession` 增 `workerArchive`（默认 `true`）与 `workerArchiveDays`（默认 `3`）；`workerArchive:false` 完全回到旧行为。
+- 日志：结算 `archived child <id> (settled)`；过期 `archived child <id> (stale)`、`purged stale workers: N/M`；跳过 `skip archive <id>`。
+- 不碰宿主、不碰 `lib/panel.js`、不碰 `client.js`；不碰 `role-` 前缀与 `state.roles` 登记会话。
+
+**验收判据 E12.27（需重启加载 0.9.6 后验）**
+1. 派一个 worker，完成后 ≤5s `workspace.json` 的 `global.archivedSessionIds` 含其 id。
+2. `unarchiveSession(id)` 后该会话能继续跑、原位置复原。
+3. `state.roles` 里的角色 id 从不出现在 `archivedSessionIds`。
+4. `state.singleSessionChildArchive` 无新增失败记录；日志无 `archive child ... failed`。
+5. `workerArchive:false` 时行为回到 0.9.5（结算不归档）。
+
+**风险与回滚**：开关 `singleSession.workerArchive:false` 即回旧行为；已归档会话可批量 `unarchiveSession` 恢复，无数据迁移、无物理删除。

@@ -21,7 +21,7 @@ window.__ModuleLoader__.load({
         roleName: '角色', roleWorkspace: '工作区', lastTask: '最近任务',
         removeRole: '解除角色', roleRemoveConfirm: '解除这个常驻角色？会归档它的会话（角色笔记保留）。',
         roleRemoved: '已解除角色', delegateLimit: '临时子智能体并发上限', delegateQueued: '排队中',
-        refresh: '刷新', close: '关闭', openRight: '在右栏打开', openConsole: '打开完整控制台',
+        refresh: '刷新', close: '关闭', ok: '确定', tablist: '控制台页签', confirmTitle: '请确认', openRight: '在右栏打开', openConsole: '打开完整控制台',
         queued: '待处理', running: '进行中', waiting: '等进行人', done: '完成', failed: '失败',
         all: '全部', search: '搜索工单 id / 标题', noMatch: '没有匹配的工单',
         tickets: '工单', noTickets: '还没有工单。先在「源」里启用一个源。',
@@ -64,7 +64,7 @@ window.__ModuleLoader__.load({
         roleName: 'Role', roleWorkspace: 'Workspace', lastTask: 'Last task',
         removeRole: 'Remove role', roleRemoveConfirm: 'Remove this permanent role? Its session is archived (notes are kept).',
         roleRemoved: 'Role removed', delegateLimit: 'Temporary worker limit', delegateQueued: 'Queued',
-        refresh: 'Refresh', close: 'Close', openRight: 'Open in right bar', openConsole: 'Open full console',
+        refresh: 'Refresh', close: 'Close', ok: 'OK', tablist: 'Console tabs', confirmTitle: 'Please confirm', openRight: 'Open in right bar', openConsole: 'Open full console',
         queued: 'Queued', running: 'Running', waiting: 'Waiting', done: 'Done', failed: 'Failed',
         all: 'All', search: 'Search id / title', noMatch: 'No matching tickets',
         tickets: 'Tickets', noTickets: 'No tickets yet. Enable a source in Sources.',
@@ -431,6 +431,14 @@ window.__ModuleLoader__.load({
 .syhb-dot.done{background:var(--dsw-alias-state-success-primary)}
 .syhb-dot.failed{background:var(--dsw-alias-state-error-primary)}
 .syhb-subject{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* S5：键盘/读屏改造。焦点可见、行内确认、只给读屏的文本。 */
+.syh-root :focus-visible,.syh-root:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
+.syh-capsule:focus-within{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
+.syhb-row:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px;background:var(--dsw-alias-bg-layer-2)}
+.syh-sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.sysi-error{box-shadow:inset 0 0 0 2px var(--dsw-alias-state-error-primary);color:var(--dsw-alias-state-error-primary)}
+.syh-confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:8px 10px;margin:0 0 12px;font-size:12px}
+.syh-confirm-text{flex:1;min-width:180px}
 /* S4：窄栏降级。按容器宽度（右栏 320/360/380 或主面板）判断，不按视口。 */
 .syh-td-err{display:none;font-size:11px;margin-top:2px}
 .syh-savebar{flex-wrap:wrap}
@@ -482,13 +490,16 @@ window.__ModuleLoader__.load({
       // 登记按钮也订阅 consoleStore，不再自己起定时器。
       const { data: state, reload: load } = useConsoleResource(sessionId ? `single:${sessionId}` : null)
       const [busy, setBusy] = React.useState(false)
+      // S5：登记失败不再弹浏览器 alert，改成按钮红框 + 行内只读提示（读屏经 role=alert 播报）。
+      const [error, setError] = React.useState('')
       const turnOn = async () => {
         setBusy(true)
+        setError('')
         try {
           await post('/action', { action: 'register-single', sessionId })
           await load()
-        } catch (error) {
-          if (typeof window !== 'undefined' && window.alert) window.alert(String(error?.message || error))
+        } catch (reason) {
+          setError(String(reason?.message || reason))
         } finally {
           setBusy(false)
         }
@@ -500,14 +511,17 @@ window.__ModuleLoader__.load({
       // 登记成功后入口消失：本工作区已有唯一的单会话，不再给第二个入口。
       if (state.registered === true) return null
       const title = state ? (state.workspaceId ? t('pillTip') : t('pillNoWorkspace')) : t('pill')
-      return h('button', {
-        type: 'button',
-        className: 'sysi',
-        disabled: busy || !sessionId,
-        title,
-        'aria-label': t('pill'),
-        onClick: turnOn,
-      }, h('style', null, CSS), h(SuperagentGlyph, null))
+      return h('span', { className: 'sysi-wrap', title: error || title },
+        h('button', {
+          type: 'button',
+          className: `sysi${error ? ' sysi-error' : ''}`,
+          disabled: busy || !sessionId,
+          title: error || title,
+          'aria-label': error ? `${t('pill')}：${error}` : t('pill'),
+          onClick: turnOn,
+        }, h('style', null, CSS), h(SuperagentGlyph, null)),
+        error ? h('span', { className: 'syh-sr-only', role: 'alert' }, error) : null,
+      )
     }
 
     function PressureBar({ ratio }) {
@@ -530,6 +544,8 @@ window.__ModuleLoader__.load({
       if (visible.length === 0) return null
       const running = tickets.filter((item) => item.status === 'running').length
       const pending = tickets.filter((item) => item.status === 'queued').length
+      // S5：任务板行按 D6 仍是「点击打开控制台」，但改成键盘可聚焦 / Enter / Space 可激活的按钮语义。
+      const openConsole = () => { try { props.ctx.layout.selectPanel(PANEL_ID) } catch { /* 忽略 */ } }
       return h('section', { className: 'syhb', 'data-superagent-board': '' },
         h('style', null, CSS),
         h('h4', null, t('boardTitle'),
@@ -539,17 +555,30 @@ window.__ModuleLoader__.load({
             t('boardTotal', { count: tickets.length }),
           ].filter(Boolean).join(' · ')),
         ),
-        visible.map((ticket) => h('div', {
-          key: ticket.id,
-          className: 'syhb-row',
-          title: ticket.summary || ticket.lastError || ticket.title || ticket.id,
-          onClick: () => { try { props.ctx.layout.selectPanel(PANEL_ID) } catch { /* 忽略 */ } },
-          style: { cursor: 'pointer' },
-        },
-          h('i', { className: `syhb-dot ${ticket.status}` }),
-          h('span', { className: 'syhb-subject' }, ticket.title || ticket.id),
-          h('span', { className: 'syhb-muted' }, t(ticket.status) || ticket.status),
-        )),
+        visible.map((ticket) => {
+          const label = ticket.title || ticket.id
+          const status = t(ticket.status) || ticket.status
+          return h('div', {
+            key: ticket.id,
+            className: 'syhb-row',
+            title: ticket.summary || ticket.lastError || label,
+            role: 'button',
+            tabIndex: 0,
+            'aria-label': `${label} · ${status}`,
+            onClick: openConsole,
+            onKeyDown: (event) => {
+              if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+                event.preventDefault()
+                openConsole()
+              }
+            },
+            style: { cursor: 'pointer' },
+          },
+            h('i', { className: `syhb-dot ${ticket.status}` }),
+            h('span', { className: 'syhb-subject' }, label),
+            h('span', { className: 'syhb-muted' }, status),
+          )
+        }),
       )
     }
 
@@ -569,11 +598,48 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'syh-empty', role: 'status' }, children)
     }
 
+    // S5 面板内确认：替代浏览器原生 confirm，消息与确定/取消按钮都在控制台里，可 Tab / Enter。
+    function ConfirmBar({ t, confirm, onResolve }) {
+      if (!confirm) return null
+      return h('div', {
+        className: 'syh-confirm',
+        role: 'alertdialog',
+        'aria-live': 'assertive',
+        'aria-label': t('confirmTitle'),
+      },
+        h('span', { className: 'syh-confirm-text' }, confirm.message),
+        h('button', { type: 'button', className: 'syh-btn syh-btn-primary', onClick: () => onResolve(true) }, t('ok')),
+        h('button', { type: 'button', className: 'syh-btn', onClick: () => onResolve(false) }, t('cancel')),
+      )
+    }
+
+    // S5 页签键盘导航：方向键 / Home / End 返回目标索引，其他键返回 -1；Tab 仍可逐个到达。
+    function nextTabIndex(length, index, key) {
+      if (!length) return -1
+      if (key === 'ArrowRight') return (index + 1) % length
+      if (key === 'ArrowLeft') return (index - 1 + length) % length
+      if (key === 'Home') return 0
+      if (key === 'End') return length - 1
+      return -1
+    }
+
     function TabsBar({ t, tabs, tab, onSelect }) {
-      return h('div', { className: 'syh-tabs' }, tabs.map((key) => h('button', {
+      const onKeyDown = (event, index) => {
+        const next = nextTabIndex(tabs.length, index, event.key)
+        if (next < 0) return
+        event.preventDefault()
+        onSelect(tabs[next])
+        const sibling = event.currentTarget?.parentNode?.children?.[next]
+        if (sibling && typeof sibling.focus === 'function') sibling.focus()
+      }
+      return h('div', { className: 'syh-tabs', role: 'tablist', 'aria-label': t('tablist') }, tabs.map((key, index) => h('button', {
         key,
+        type: 'button',
+        role: 'tab',
+        'aria-selected': tab === key,
         className: `syh-tab ${tab === key ? 'active' : ''}`,
         onClick: () => onSelect(key),
+        onKeyDown: (event) => onKeyDown(event, index),
       }, t(TAB_LABELS[key] ?? 'overview'))))
     }
 
@@ -686,14 +752,16 @@ window.__ModuleLoader__.load({
       }
       const list = tickets.filter(matchFilter)
       return h('div', null,
-        h('div', { className: 'syh-chips' },
+        h('div', { className: 'syh-chips', role: 'group', 'aria-label': t('status') },
           ['all', 'queued', 'running', 'waiting', 'done', 'failed'].map((key) => h('button', {
             key,
+            type: 'button',
             className: `syh-chip ${filter === key ? 'active' : ''}`,
+            'aria-pressed': filter === key,
             onClick: () => onFilter(key),
           }, key === 'all' ? t('all') : t(key))),
         ),
-        h('input', { className: 'syh-search', value: query, placeholder: t('search'), onChange: (event) => onQuery(event.target.value) }),
+        h('input', { className: 'syh-search', value: query, placeholder: t('search'), 'aria-label': t('search'), onChange: (event) => onQuery(event.target.value) }),
         h('div', { className: 'syh-card' },
           list.length === 0
             ? h(EmptyState, null, query ? t('noMatch') : t('noTickets'))
@@ -925,20 +993,31 @@ window.__ModuleLoader__.load({
         }
       }, [data, form])
 
-      // S4 表单 dirty 保护：切页签或关闭前弹一次确认；保存后 form 归 null，脏标记自动清除。
+      // S4 表单 dirty 保护 + S5 面板内确认：脏时把离开动作挂到确认条，确定后才执行。
       const dirty = isFormDirty(form, baseline)
+      const [pendingConfirm, setPendingConfirm] = React.useState(null)
+      const leaveIntent = React.useRef(null)
+      const askConfirm = (message, action) => setPendingConfirm({ message, action })
+      const resolveConfirm = (accepted) => {
+        const pending = pendingConfirm
+        setPendingConfirm(null)
+        if (accepted && pending) pending.action()
+      }
       const confirmLeave = () => {
         if (!dirty) return true
-        if (typeof window === 'undefined' || typeof window.confirm !== 'function') return true
-        return window.confirm(t('unsavedConfirm'))
+        askConfirm(t('unsavedConfirm'), leaveIntent.current)
+        return false
       }
       const selectTab = (next) => {
         if (next === tab) return
+        leaveIntent.current = () => setTab(next)
         if (!confirmLeave()) return
         setTab(next)
       }
       const requestClose = () => {
-        if (confirmLeave()) onClose?.()
+        leaveIntent.current = () => onClose?.()
+        if (!confirmLeave()) return
+        onClose?.()
       }
 
       const setField = (path, value) => {
@@ -976,8 +1055,7 @@ window.__ModuleLoader__.load({
 
       const act = (ticket, action) => run(() => post('/action', { ticketId: ticket.id, action }))
 
-      const compactNow = (sessionId) => run(async () => {
-        if (typeof window !== 'undefined' && typeof window.confirm === 'function' && !window.confirm(t('confirmCompact'))) return
+      const compactNow = (sessionId) => askConfirm(t('confirmCompact'), () => run(async () => {
         setBusySession(sessionId)
         setMsg(t('compacting'))
         try {
@@ -986,10 +1064,9 @@ window.__ModuleLoader__.load({
         } finally {
           setBusySession('')
         }
-      })
+      }))
 
-      const deleteSingle = (sessionId) => run(async () => {
-        if (typeof window !== 'undefined' && typeof window.confirm === 'function' && !window.confirm(t('deleteSingleConfirm'))) return
+      const deleteSingle = (sessionId) => askConfirm(t('deleteSingleConfirm'), () => run(async () => {
         setBusySession(sessionId)
         try {
           await post('/action', { action: 'delete-single', sessionId })
@@ -997,13 +1074,12 @@ window.__ModuleLoader__.load({
         } finally {
           setBusySession('')
         }
-      })
+      }))
 
-      const removeRole = (role) => run(async () => {
-        if (typeof window !== 'undefined' && typeof window.confirm === 'function' && !window.confirm(t('roleRemoveConfirm'))) return
+      const removeRole = (role) => askConfirm(t('roleRemoveConfirm'), () => run(async () => {
         await post('/action', { action: 'remove-role', role })
         setMsg(t('roleRemoved'))
-      })
+      }))
 
       const openSession = (sessionId) => {
         const workspace = services.workspace
@@ -1030,7 +1106,12 @@ window.__ModuleLoader__.load({
       const sourceHealth = data?.sources ?? {}
       const enabledSources = data?.config?.sources ? Object.entries(data.config.sources).filter(([, value]) => value.enabled).map(([key]) => key) : []
       const visibleTabs = compact ? ['overview', 'tickets'] : TABS
-      const pickStat = (key) => { if (!confirmLeave()) return; setFilter(key); setTab('tickets') }
+      const pickStat = (key) => {
+        leaveIntent.current = () => { setFilter(key); setTab('tickets') }
+        if (!confirmLeave()) return
+        setFilter(key)
+        setTab('tickets')
+      }
 
       let body
       if (tab === 'overview') {
@@ -1060,8 +1141,9 @@ window.__ModuleLoader__.load({
             onClose: requestClose,
           }),
           h(ErrorBanner, { t, loadError, error }),
+          h(ConfirmBar, { t, confirm: pendingConfirm, onResolve: resolveConfirm }),
           h(TabsBar, { t, tabs: visibleTabs, tab, onSelect: selectTab }),
-          body,
+          h('div', { role: 'tabpanel', 'aria-label': t(TAB_LABELS[tab]) }, body),
           compact ? h('div', { className: 'syh-muted', style: { fontSize: 11, marginTop: 8 } }, t('closeHint')) : null,
         ),
       )
@@ -1091,7 +1173,7 @@ window.__ModuleLoader__.load({
     return {
       inject: ['slots', 'layout', 'locale'],
       // D9 测试缝：只读暴露纯函数与数据层入口，不参与渲染。
-      __internals: { createConsoleStore, filterTicketsForSession, buildForm, formPayload, isFormDirty, DICT, TABS, TAB_LABELS },
+      __internals: { createConsoleStore, filterTicketsForSession, buildForm, formPayload, isFormDirty, nextTabIndex, DICT, TABS, TAB_LABELS },
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh: DICT.zh, en: DICT.en }))
 

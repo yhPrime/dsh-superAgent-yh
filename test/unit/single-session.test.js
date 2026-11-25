@@ -191,3 +191,20 @@ test('开关关闭：maintain / snapshot / list 都是空', async () => {
   assert.deepEqual(await off.maintainer.list(), [])
   assert.equal((await off.maintainer.snapshot()).enabled, false)
 })
+
+test('onPresetSelected：未登记/同 preset 不动；空会话被改回 minimal；已开始只提示一次', async () => {
+  const h = harness()
+  assert.equal((await h.maintainer.onPresetSelected('other', 'ptc')).ignored, 'not-registered')
+  await h.maintainer.register('s1') // 登记后 preset 已是 minimal
+  h.calls.selected.length = 0
+  assert.equal((await h.maintainer.onPresetSelected('s1', 'minimal')).ignored, 'same')
+  const out = await h.maintainer.onPresetSelected('s1', 'ptc')
+  assert.deepEqual(out, { ok: true, reverted: true })
+  assert.deepEqual(h.calls.selected, ['minimal'])
+
+  const started = harness({ blank: false })
+  started.store.state.singleSessions.w1 = 's1'
+  const skip = await started.maintainer.onPresetSelected('s1', 'ptc')
+  assert.equal(skip.ignored, 'started')
+  assert.deepEqual(started.calls.selected, [])
+})

@@ -1,6 +1,6 @@
 {
   "name": "dsh-superagent-yh",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "private": true,
   "description": "dsh-superAgent-yh 自制版：每个工单在独立会话与独立目录执行，主线只收三条短消息。",
   "type": "module",

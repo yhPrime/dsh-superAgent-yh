@@ -1,8 +1,8 @@
 # 子计划书 · 单会话（会话内智能体团队）+ UI
 
-> 版本：v2.11｜状态：**定稿（2026-11-25 用户授权「你来定，都要最优解」）**｜定稿日期：2026-11-25｜权威范围：单会话的会话内界面 + 控制台 UI + 后端守卫收口；不改源协议、不改主线 relay
+> 版本：v2.12｜状态：**定稿（2026-11-25 用户拍板 A：直派子智能体纳管为工单，前提「必须是真工单」）**｜定稿日期：2026-11-25｜权威范围：单会话的会话内界面 + 控制台 UI + 后端守卫收口 + 直派子会话的纳管/清理；不改源协议、不改主线 relay
 >
-> 唯一权威。两份草案（`docs/草案-控制台重构-v0.1.md`、`docs/草案-单会话UI重构-v0.1.md`）并入本版后仅存档。版本槽：v2.10（纯调度 preset / D30）→ **v2.11（本版）**。
+> 唯一权威。两份草案（`docs/草案-控制台重构-v0.1.md`、`docs/草案-单会话UI重构-v0.1.md`）并入本版后仅存档。版本槽：v2.10（纯调度 preset / D30）→ v2.11（会话内 UI）→ **v2.12（本版，直派子会话纳管）**。
 
 ## 1 继承与变更说明
 
@@ -16,6 +16,13 @@
 4. 后端守卫收口：dispatcher 收敛失败不再静默、钩子可测、pin 失败回滚（D37，附录 A）。
 5. 任务板与服务端 `state.tickets` 加上限（D34）。
 
+**v2.12 改了什么（D40）**
+
+1. 直派子会话纳入工单语义：单会话用 `subagent` 工具派出的子会话不经过插件管线、宿主也不归档，越挂越多（实测 26 个）。现在由维护器对账：**判定为真工单的**登记进 `state.tickets`（`id=subagent:<子会话id>`，`source=subagent`，`kind=task`，`childSessionId`=子会话，`targetSessionId`=单会话，`workspaceId`=所属工作区）；跑完转 `done` 并 relay 一条「完成」。
+2. 判定只认确定性信号（不猜）：子会话事件里有任意 `tool/call` → 真工单；否则首条任务 prompt ≥40 字符且（label 非占位 或 prompt ≥80）→ 真工单；「只回复 ok」这类回声 / prompt 太薄 / 空 → 噪音，不建工单。
+3. 噪音与用过的子会话都在空闲 `singleSession.childIdleMinutes`（默认 2）后 `archiveSession(id,{stopActivity:true})` 归档；失败按 3 次 + 10 分钟窗口退避，写 `lastError`，不阻塞主流程。
+4. 开关 `singleSession.adoptChildren`（默认 true）；已登记工作区状态里出现 `children:{adopted,cleaned,total}` 便于验收。
+
 **正式修订记录（v2.10 原文 → v2.11）**
 
 | # | v2.10 原文（定位） | v2.11 修订 | 原因 |
@@ -24,6 +31,8 @@
 | R2 | §2.12「客户端」行（原第 205 行）：「已登记且是当前会话=显示已点亮；同工作区已有别的单会话=不渲染」 | 改为「**已登记=不渲染**（入口消失）；未启用/工作区被他人占用=不渲染」 | D31：残留可点图标是缺陷；「已点亮」与「不渲染」矛盾 |
 | R3 | §2.4 / §2.7「任务板保留最近 20 条」 | 客户端：未终态全部 + 最近终态补足，总量 ≤20；服务端：只裁**已 relay** 的终态到最近 20 条，未终态与未 relay 不裁 | D34；未 relay 就裁会丢回写 |
 | R4 | §2.13 旧注释「切到极简 preset（v2.9 / D28）」 | 订正为 dispatcher（D30） | 注释与代码不符 |
+| R5 | v2.11 未涉及直派子会话 | 新增 D40：直派子会话纳管为工单 / 非工单空闲归档 | 实测 26 个子会话挂着没人清，用户拍板 A |
+| R6 | 工单只来自源 | 工单可由单会话直派子会话生成（`source=subagent`） | 与 D14「worker=子智能体」对齐，避免两套执行语义 |
 
 ## 2 现状与证据
 
@@ -56,6 +65,8 @@
 | 标题 | 登记成功后服务端 rename；canonical 存 `state.singleSessionTitles`；`maintain()` 每轮对账（≤60s 自愈）、冷会话不 resume；不做 `session/event` 即时纠偏；解除/删除不还原原标题 | D32 / §5.2 |
 | 后端守卫 | dispatcher 失败必须 warn + `state.lastError` + 插件日志；钩子抽函数补单测；disposer 清理；pin 失败回滚 | D37 / 附录 A |
 | 验收日志 | `dispatcher:` 行走 `ctx.logger`，**不在** `single-session.log`；验收看插件日志（`logs/dispatcher.log`）+ `header.tools` | D39 |
+| 直派子会话 | 真工单纳管进 `state.tickets`（`source=subagent`）；噪音不建工单；两类空闲 2 分钟归档（`stopActivity:true`）；开关 `singleSession.adoptChildren` | D40 / §5.6 |
+| 版本号 | **0.8.2**（补丁级：直派子会话纳管 + 清理）；发布 `dist/dsh-superagent-yh-0.8.2.tgz` | D40 / M7 |
 
 ## 5 单会话生命周期
 
@@ -84,6 +95,14 @@
 ### 5.5 解除/删除（D33）
 
 控制台工作空间卡「删除单会话（红）」→ `delete-single` → `removeSingle`：`deleting.add` → `unregister`（删登记 → `unpinSession` → 恢复 `singleSessionPrevPreset`：会话活着重试 1 次，仍失败写 `state.singleSessionRestore[w]={ok:false,reason,at}` 与 `state.lastError`；会话不活记 `not-live`）→ `archiveSession` → `log` → `finally deleting.delete`。不还原标题、不重新 pin、不删旧 `intake-*`。
+
+### 5.6 直派子会话（D40）
+
+- 每轮 `maintain()` 对已登记单会话取 `sessionController.list()` 里 `parentSessionId === 单会话id && origin === 'subagent'` 的子会话。
+- 去重：已被插件工单管线占用（`childSessionId` 已在别的工单里）的不重复纳管；已纳管的只做状态推进。
+- 判定见 `lib/child-tickets.js:classifyChild`：`tool/call` 优先；回声正则 `/^(?:只|请)?(?:回复|回答|说|答)…(?:ok|好|收到)/i` 判噪音；prompt 阈值 40/80 字符。
+- 归档：`workspaceRegistry.archiveSession(id,{stopActivity:true})`（跳过活动检查）；失败退避写 `state.lastError`；`state.singleSessionChildNoise` 记噪音判定避免重读事件。
+- 已完成才被发现的子会话只登记成 `done`，**不补发 relay**（避免翻旧账刷屏）；正在跑的补一条 `started`。
 
 ## 6 控制台阶段（后置，本批不做）
 
@@ -165,6 +184,17 @@ node test/tools/verify-v210.mjs   # 版本断言改 0.8.1 后全 PASS
 ```
 回滚：`git checkout -- package.json README.md docs/` 并删 tgz。
 
+### M7 v2.12（0.8.2）：直派子会话纳管
+
+改动：新增 `lib/child-tickets.js`；`lib/config.js` 加 `singleSession.adoptChildren`/`childIdleMinutes`；`lib/single-session.js` 加 `reconcileChildren`/`archiveChild` 并在 `maintain()` 调用；`lib/index.js` 把 `relay` 传进维护器；文档与版本 0.8.2。
+验收（E12.22–E12.23）：
+```powershell
+node --test test/unit/child-tickets.test.js test/unit/single-session.test.js
+node test/tools/verify-v210.mjs   # 版本断言改 0.8.2 后全 PASS
+```
+E12.22：真机重启后，既有 26 个子会话中的噪音与完成项在 ≤2 轮维护内被归档，`state.tickets` 出现 `subagent:*` 的真工单。
+E12.23：新发一条任务 → 子会话被 `started` 汇报，完成后 `done` 汇报，其后被归档；主工单（源触发的）行为不变。
+
 ## 8 测试口径
 
 | 轮次 | 验什么 | 证据 |
@@ -181,10 +211,11 @@ node test/tools/verify-v210.mjs   # 版本断言改 0.8.1 后全 PASS
 3. 发首轮消息后 LLM/宿主标题生成器是否不再覆盖标题。
 4. 单会话 `header.tools` 是否只剩 `subagent`（无 `ops_bash`/`exp_recall`/shell/fs）。
 5. worker 会话工具面不受影响（bash/fs 可用）。
+6. 直派子会话：发任务后任务板出现 `subagent:*` 行；子会话结束后被归档（`single-session.log` 有 `archived child ... (idle)`）。
 
 ## 9 兼容与迁移
 
-- `state.json`：新增 `singleSessionTitles`、`singleSessionRestore`，`migrate()` 读时补齐；老 state 直接可用。
+- `state.json`：新增 `singleSessionTitles`、`singleSessionRestore`、`singleSessionChildNoise`、`singleSessionChildArchive`，`migrate()`/`??=` 读时补齐；老 state 直接可用。
 - 配置：`singleSession.autoCreate` 保留（deprecated，UI 不再读写）；已装 profile 的 `cordis.patch.yml` 不自动改。
 - 旧 `intake-*`：不批量删除。
 - 行为变化：登记后图标消失（可能找不到入口）→ 控制台/README 写明去控制台删除；无独立「解除」入口。
@@ -198,6 +229,8 @@ node test/tools/verify-v210.mjs   # 版本断言改 0.8.1 后全 PASS
 | `rename` 要求会话 live | 冷会话调用直接失败 | `maintain` 只在有 `agent` 时重写；冷会话跳过 |
 | 裁剪早于 relay | 已终态未回写的工单被删，结果丢失 | 只裁已 relay 终态，单测锁死 |
 | pin 成功、preset 失败只 unpin | 假登记、占用工作区 | 顺序固定 pin→preset，两步失败都删登记+unpin，幂等 |
+| 把噪音误纳成工单 | 任务板被测试回声刷屏 | 判定以 `tool/call` 优先，回声正则；`adoptChildren=false` 可整体关闭 |
+| 子会话归档失败（宿主活动窗口） | 子会话清不掉、日志刷屏 | `stopActivity:true` + 3 次/10 分钟退避 + `lastError` 可见 |
 | 图标消失被当成功能坏了 | 无处删除 | 控制台卡片/README 写明；`/status` 暴露登记状态 |
 | 客户端改动未重启 | 看到旧图标/旧文案 | 验收前重启 DSH 并刷新页面 |
 
@@ -230,4 +263,6 @@ node test/tools/verify-v210.mjs   # 版本断言改 0.8.1 后全 PASS
 9. D36 控制台后置：分层 + 收敛，四页签不变，autoCreate 仅 UI 移除，独立页只读降级。
 10. D37 后端守卫见附录 A；D38 版本 0.8.1；D39 日志口径见附录 A 末。
 11. §2.13 / D28-D30 执行形态不变（纯调度 preset）。
+12. §5.6 / D40：直派子会话纳管（`source=subagent`），真工单才登记，噪音与用过的空闲 2 分钟归档。
+13. D40 版本 0.8.2；开关 `singleSession.adoptChildren`、`singleSession.childIdleMinutes`。
 12. 文档：本版唯一权威，两份草案归档。

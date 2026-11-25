@@ -39,8 +39,9 @@ function harness({
   selectError = null, selectSequence = [], pinError = null, renameError = null,
   agentAlive = true, config: configPatch = {},
   renameNormalize = (title) => title, renameNoReturn = false,
+  children = [], childRecords = {}, childArchiveError = null,
 } = {}) {
-  const calls = { pin: 0, unpin: 0, archive: 0, compact: 0, selected: [], rename: 0, titles: [], accepted: [] }
+  const calls = { pin: 0, unpin: 0, archive: 0, archiveChild: 0, compact: 0, selected: [], rename: 0, titles: [], accepted: [], relay: [] }
   const store = { state: { singleSessions: {}, singleSession: {}, lastError: null }, save() {} }
   const config = normalizeConfig({ ...configPatch, singleSession: { enabled, idleMinutes: 30, pressureRatio: 0.5, ...(configPatch.singleSession ?? {}) } })
   const agent = { session: {} }
@@ -49,15 +50,21 @@ function harness({
     ctx: {}, config, store, log: () => {}, redact: (x) => x,
     deps: {
       listWorkspaces: () => workspaces,
-      listSessions: async () => sessions,
+      listSessions: async () => [...sessions, ...children],
       getState: async () => state,
       getAgent: () => (agentAlive ? agent : null),
       getPressure: () => pressure,
       getCompaction: () => ({ compactNow: async () => { calls.compact += 1; return { ok: true } }, compactRegion: async () => ({ ok: true }) }),
-      readEvents: async () => [],
+      readEvents: async (sessionId) => childRecords[sessionId] ?? [],
       pinSession: async () => { if (pinError) throw new Error(pinError); calls.pin += 1 },
       unpinSession: async () => { calls.unpin += 1 },
       archiveSession: async () => { calls.archive += 1 },
+      archiveChild: async (sessionId) => {
+        if (childArchiveError) throw new Error(childArchiveError)
+        calls.archiveChild += 1
+        calls.archivedChildren = [...(calls.archivedChildren ?? []), sessionId]
+      },
+      relay: { send: async (ticket, kind) => { calls.relay.push({ id: ticket.id, kind }) } },
       resolveByPath: async () => workspaces[0],
       resolveAgent: async () => ({ agent }),
       presetOf: () => 'standard',
@@ -394,4 +401,55 @@ test('guardSessionActivity：已登记会话上报活动阻断入档；删除中
   // 控制台删除中放行，否则 removeSingle 归档会被自己的活动上报挡住。
   const deleting = { isRegistered: () => true, isDeleting: () => true }
   assert.deepEqual(await guardSessionActivity(deleting, { sessionId: 's1' }, next), [{ kind: 'message' }])
+})
+
+test('子会话纳管：有工具调用 = 真工单，登记并汇报；空闲后归档', async () => {
+  const child = { sessionId: 'c1', parentSessionId: 's1', origin: 'subagent', running: true, updatedAt: Date.now(), title: '修标题' }
+  const h = harness({ children: [child], childRecords: { c1: [{ event: { type: 'tool/call', seq: 3 } }] } })
+  await h.maintainer.register('s1')
+  await h.maintainer.maintain()
+  const ticket = (h.store.state.tickets ?? {})['subagent:c1']
+  assert.ok(ticket, '真工单应被登记')
+  assert.equal(ticket.status, 'running')
+  assert.equal(ticket.childSessionId, 'c1')
+  assert.equal(ticket.targetSessionId, 's1')
+  assert.deepEqual(h.calls.relay, [{ id: 'subagent:c1', kind: 'started' }])
+
+  child.running = false
+  child.updatedAt = Date.now() - 3 * 60_000
+  await h.maintainer.maintain()
+  assert.equal(h.store.state.tickets['subagent:c1'].status, 'done')
+  assert.deepEqual(h.calls.relay.map((r) => r.kind), ['started', 'done'])
+  assert.deepEqual(h.calls.archivedChildren, ['c1'])
+  assert.ok(h.store.state.tickets['subagent:c1'].archivedAt)
+})
+
+test('子会话纳管：回声/占位 = 噪音，不建工单，空闲即归档', async () => {
+  const echo = { sessionId: 'c2', parentSessionId: 's1', origin: 'subagent', running: false, updatedAt: Date.now() - 5 * 60_000, title: '空占位' }
+  const h = harness({
+    children: [echo],
+    childRecords: {
+      c2: [{ event: { type: 'user/message', data: { content: [{ type: 'text', text: '只回复「ok」。Your final answer is delivered automatically: done' }] } } }],
+    },
+  })
+  await h.maintainer.register('s1')
+  await h.maintainer.maintain()
+  assert.equal((h.store.state.tickets ?? {})['subagent:c2'], undefined)
+  assert.equal(h.store.state.singleSessionChildNoise.c2, 'echo')
+  assert.deepEqual(h.calls.archivedChildren, ['c2'])
+  assert.equal(h.calls.relay.length, 0)
+})
+
+test('子会话纳管：归档失败记 lastError、不抛；adoptChildren=false 时整段跳过', async () => {
+  const echo = { sessionId: 'c3', parentSessionId: 's1', origin: 'subagent', running: false, updatedAt: Date.now() - 5 * 60_000, title: '空' }
+  const broken = harness({ children: [echo], childArchiveError: 'archive boom' })
+  await broken.maintainer.register('s1')
+  await broken.maintainer.maintain()
+  assert.match(broken.store.state.lastError, /子会话归档失败（c3）：archive boom/)
+
+  const off = harness({ children: [echo], config: { singleSession: { adoptChildren: false } } })
+  await off.maintainer.register('s1')
+  await off.maintainer.maintain()
+  assert.equal(off.calls.archiveChild, 0)
+  assert.equal((off.store.state.tickets ?? {})['subagent:c3'], undefined)
 })

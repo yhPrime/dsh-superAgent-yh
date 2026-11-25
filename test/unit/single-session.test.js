@@ -450,6 +450,24 @@ test('子会话纳管：读不到事件时不动、不归档（防止把真任�
   assert.equal(h.store.state.singleSessionChildUnknown.c9 !== undefined, true)
 })
 
+test('子会话纳管：读不到事件会隔一阵重试，读到了就正常纳管', async () => {
+  const ghost = { sessionId: 'c10', parentSessionId: 's1', origin: 'subagent', running: false, updatedAt: Date.now() - 5 * 60_000, title: '' }
+  const records = { c10: [] }
+  const h = harness({ children: [ghost], childRecords: records })
+  await h.maintainer.register('s1')
+  await h.maintainer.maintain()
+  assert.equal(h.store.state.singleSessionChildUnknown.c10.attempts, 1)
+  // 还没到重试时间：不重复记、也不纳管。
+  await h.maintainer.maintain()
+  assert.equal(h.store.state.singleSessionChildUnknown.c10.attempts, 1)
+  // 把上次时间拨到两分钟前，且事件已经读得到：这次应纳管成工单。
+  h.store.state.singleSessionChildUnknown.c10.at = Date.now() - 5 * 60_000
+  records.c10 = [{ event: { type: 'tool/call', seq: 2, data: { name: 'ops_bash' } } }]
+  await h.maintainer.maintain()
+  assert.ok((h.store.state.tickets ?? {})['subagent:c10'], '重试读到事件后应纳管')
+  assert.equal(h.store.state.singleSessionChildUnknown.c10, undefined, '纳管后清掉 unknown 记录')
+})
+
 test('子会话纳管：归档失败记 lastError、不抛；adoptChildren=false 时整段跳过', async () => {
   const echo = { sessionId: 'c3', parentSessionId: 's1', origin: 'subagent', running: false, updatedAt: Date.now() - 5 * 60_000, title: '空' }
   const broken = harness({

@@ -55,3 +55,22 @@ test('旧 state 迁移补齐缺省字段', () => {
   const saved = JSON.parse(readFileSync(join(dir, 'state.json'), 'utf8'))
   assert.equal(saved.version, STATE_VERSION)
 })
+
+test('迁移：丢掉 0.9.0 误判的子会话噪音缓存，只丢一次', () => {
+  const dir = tempDir()
+  const store = openStore({ dir })
+  store.update((state) => {
+    state.singleSessionChildNoise = { c1: 'empty', c2: 'empty' }
+    state.singleSessionChildUnknown = { c3: { at: 1 } }
+  })
+  store.close()
+  const reopened = openStore({ dir })
+  assert.equal(reopened.state.singleSessionChildNoise, undefined)
+  assert.equal(reopened.state.singleSessionChildUnknown, undefined)
+  assert.equal(reopened.state.singleSessionChildNoiseVersion, 1)
+  reopened.update((state) => { state.singleSessionChildNoise = { c9: 'echo' } })
+  reopened.close()
+  const again = openStore({ dir })
+  assert.equal(again.state.singleSessionChildNoise.c9, 'echo')
+  again.close()
+})

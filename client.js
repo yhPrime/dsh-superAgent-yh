@@ -332,10 +332,12 @@ window.__ModuleLoader__.load({
           setBusy(false)
         }
       }
-      if (state && (!state.ok || state.enabled !== true)) return null
-      if (state && !state.registered && state.workspaceOccupied) return null
+      // 先等状态回来再决定画不画：否则打开已登记的单会话时，按钮会先闪出来一下再消失。
+      if (!state) return null
+      if (!state.ok || state.enabled !== true) return null
+      if (!state.registered && state.workspaceOccupied) return null
       // 登记成功后入口消失：本工作区已有唯一的单会话，不再给第二个入口。
-      if (state?.registered === true) return null
+      if (state.registered === true) return null
       const title = state ? (state.workspaceId ? t('pillTip') : t('pillNoWorkspace')) : t('pill')
       return h('button', {
         type: 'button',

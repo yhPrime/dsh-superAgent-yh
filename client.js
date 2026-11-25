@@ -8,13 +8,17 @@ window.__ModuleLoader__.load({
     const NS = 'dsh-superagent-yh'
     const BASE = '/dsh-superagent-yh'
     const PANEL_ID = NS
-    const TABS = ['overview', 'tickets', 'sources', 'settings']
+    const TABS = ['overview', 'tickets', 'roles', 'sources', 'settings']
 
     const DICT = {
       zh: {
         title: 'Superagent 控制台',
         subtitle: '每个工单独立会话与目录；主线只收三条短消息',
-        overview: '概览', ticketsTab: '工单', sourcesTab: '源', settingsTab: '设置',
+        overview: '概览', ticketsTab: '工单', rolesTab: '角色', sourcesTab: '源', settingsTab: '设置',
+        noRoles: '还没有常驻角色。单会话遇到重复的活会用 delegate 带 role 派出，第一次出现时这里会自动建。',
+        roleName: '角色', roleWorkspace: '工作区', roleCreated: '创建时间', lastTask: '最近任务',
+        removeRole: '解除角色', roleRemoveConfirm: '解除这个常驻角色？会归档它的会话（角色笔记保留）。',
+        roleRemoved: '已解除角色', delegateLimit: '临时子智能体并发上限', delegateQueued: '排队中',
         refresh: '刷新', close: '关闭', openRight: '在右栏打开', openConsole: '打开完整控制台',
         queued: '待处理', running: '进行中', waiting: '等进行人', done: '完成', failed: '失败',
         all: '全部', search: '搜索工单 id / 标题', noMatch: '没有匹配的工单',
@@ -52,7 +56,11 @@ window.__ModuleLoader__.load({
       en: {
         title: 'Superagent console',
         subtitle: 'One session and directory per ticket; the main line gets three short messages',
-        overview: 'Overview', ticketsTab: 'Tickets', sourcesTab: 'Sources', settingsTab: 'Settings',
+        overview: 'Overview', ticketsTab: 'Tickets', rolesTab: 'Roles', sourcesTab: 'Sources', settingsTab: 'Settings',
+        noRoles: 'No permanent roles yet. When the single session delegates repeat work with role names, they are created here on first use.',
+        roleName: 'Role', roleWorkspace: 'Workspace', roleCreated: 'Created', lastTask: 'Last task',
+        removeRole: 'Remove role', roleRemoveConfirm: 'Remove this permanent role? Its session is archived (notes are kept).',
+        roleRemoved: 'Role removed', delegateLimit: 'Temporary worker limit', delegateQueued: 'Queued',
         refresh: 'Refresh', close: 'Close', openRight: 'Open in right bar', openConsole: 'Open full console',
         queued: 'Queued', running: 'Running', waiting: 'Waiting', done: 'Done', failed: 'Failed',
         all: 'All', search: 'Search id / title', noMatch: 'No matching tickets',
@@ -500,6 +508,12 @@ window.__ModuleLoader__.load({
         }
       })
 
+      const removeRole = (role) => run(async () => {
+        if (typeof window !== 'undefined' && typeof window.confirm === 'function' && !window.confirm(t('roleRemoveConfirm'))) return
+        await post('/action', { action: 'remove-role', role })
+        setMsg(t('roleRemoved'))
+      })
+
       const openSession = (sessionId) => {
         const workspace = services.workspace
         if (!workspace?.openSession) { setError(t('noHostService')); return }
@@ -701,6 +715,47 @@ window.__ModuleLoader__.load({
         )
       }
 
+      function rolesView() {
+        const roles = data?.roles ?? []
+        const queue = data?.delegate ?? null
+        const meta = h('div', { className: 'syh-row', style: { marginBottom: 10 } },
+          queue ? h('span', { className: 'syh-muted', style: { fontSize: 12 } },
+            `${t('delegateLimit')} ${queue.limit} · ${t('delegateQueued')} ${queue.pending}`) : null,
+        )
+        return h('div', null,
+          meta,
+          h('div', { className: 'syh-card' },
+            roles.length === 0
+              ? h('div', { className: 'syh-empty' }, t('noRoles'))
+              : h('table', { className: 'syh-table' },
+                  h('thead', null, h('tr', null,
+                    h('th', null, t('roleName')),
+                    h('th', null, t('roleWorkspace')),
+                    h('th', null, t('status')),
+                    h('th', null, t('lastTask')),
+                    h('th', null, t('actions')),
+                  )),
+                  h('tbody', null, roles.filter((row) => row.role).map((row) => h('tr', { key: row.role },
+                    h('td', null,
+                      h('strong', null, row.role),
+                      h('div', { className: 'syh-muted', style: { fontSize: 11 } }, row.sessionId),
+                    ),
+                    h('td', null, h('span', { className: 'syh-muted' }, row.workspaceId || '—')),
+                    h('td', null, row.lastError
+                      ? h('span', { className: 'syh-err' }, row.lastError)
+                      : h('span', { className: row.running ? 'syh-dot running' : 'syh-dot done', style: { marginRight: 6 } }),
+                        h('span', { className: 'syh-muted' }, row.running ? t('running') : t(row.status === 'failed' ? 'failed' : 'stateOk'))),
+                    h('td', null, row.lastTaskAt ? new Date(row.lastTaskAt).toLocaleString() : '—'),
+                    h('td', null, h('button', {
+                      className: 'syh-btn syh-btn-danger',
+                      onClick: () => removeRole(row.role),
+                    }, t('removeRole'))),
+                  ))),
+                ),
+          ),
+        )
+      }
+
       function sourcesView() {
         if (!form) return h('div', { className: 'syh-empty' }, t('loadFailed'))
         return h('div', { className: 'syh-card' },
@@ -787,7 +842,7 @@ window.__ModuleLoader__.load({
         )
       }
 
-      const body = tab === 'overview' ? overview() : tab === 'tickets' ? ticketsView() : tab === 'sources' ? sourcesView() : settingsView()
+      const body = tab === 'overview' ? overview() : tab === 'tickets' ? ticketsView() : tab === 'roles' ? rolesView() : tab === 'sources' ? sourcesView() : settingsView()
 
       return h('div', { className: `syh-root ${compact ? 'syh-compact' : ''}` },
         h('style', null, CSS),

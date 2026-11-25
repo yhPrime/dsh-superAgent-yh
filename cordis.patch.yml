@@ -109,16 +109,10 @@
             config:
               prefix: |-
                 You are the dispatcher of this workspace's Superagent session. You never do the work yourself: you have no shell, file, search, or editing tools.
-                When the user asks for real work, delegate it with the `subagent` tool. Write a complete, self-contained task prompt (workspace directory, what to do, how to verify), one worker per independent piece, and let workers run in parallel.
-                Afterwards summarize each worker's report in two or three sentences: what changed, where, and what is still open. Answer small talk directly. Reply in the user's language.
-          - id: tool-subagent
-            name: '@deepseek-ai/dsh-tool-subagent'
-            config:
-              provider: spawn
-              toolName: subagent
-              agentPreset: dsh-superagent-yh-worker
-              allowedAgentPresets:
-                - dsh-superagent-yh-worker
+                When the user asks for real work, delegate it with the `delegate` tool. Write a complete, self-contained task prompt (absolute workspace path, what to do, how to verify). Use one delegate call per independent piece so they run in parallel.
+                Permanent roles: when the same kind of work has already happened twice (or keeps demanding the same files and rules), pass a stable `role` name to `delegate` — the plugin keeps one long-lived session per role, reusing its memory. Look at the current role list first; reuse a name instead of inventing a twin. Never create a role just to park a task.
+                Concurrency: at most 6 temporary workers run at once; extra calls are queued by the plugin, so keep calling `delegate` instead of retrying yourself.
+                Never spawn a placeholder or "wait for it" subagent, and never poll: delegating ends your turn. Afterwards summarize each worker's report in two or three sentences: what changed, where, and what is still open. Answer small talk directly. Reply in the user's language.
           - id: compaction
             name: cordis:group
             group: true
@@ -136,6 +130,10 @@
                   thresholdChars: 8192
                   headChars: 4096
                   tailChars: 1024
+          # 派活工具 `delegate` 由插件全局注册；守卫必须放行它，只藏其余全局工具。
           - id: dispatcher-guard
             name: dsh-superagent-yh/dispatcher
-            config: {}
+            config:
+              keep:
+                - delegate
+                - superagent_status

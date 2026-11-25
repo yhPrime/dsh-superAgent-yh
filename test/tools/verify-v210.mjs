@@ -32,7 +32,7 @@ async function post(path, payload) {
 const status = await get('/status')
 const config = status.body?.config ?? {}
 record('状态可读', status.status === 200, `status=${status.status}`)
-record('版本 0.8.2', config.version === '0.8.2', `version=${config.version}`)
+record('版本 0.9.0', config.version === '0.9.0', `version=${config.version}`)
 record(
   '单会话默认 preset=dsh-superagent-yh-dispatcher',
   config.singleSession?.preset === 'dsh-superagent-yh-dispatcher',
@@ -40,6 +40,10 @@ record(
 )
 record('workerPreset 独立', Boolean(config.workerPreset), `workerPreset=${config.workerPreset}`)
 record('旧 orchestratorPreset 已移除', config.orchestratorPreset === undefined, String(config.orchestratorPreset))
+record('角色表可读', Array.isArray(status.body?.roles), `roles=${Array.isArray(status.body?.roles) ? status.body.roles.length : '?'}`)
+record('delegate 并发上限=6', status.body?.delegate?.limit === 6, `limit=${status.body?.delegate?.limit}`)
+const roleMissing = await post('/action', { action: 'remove-role', role: '' })
+record('remove-role 缺 role 返回 400', roleMissing.status === 400, `status=${roleMissing.status}`)
 
 const bad = await post('/settings', { singleSession: { preset: 'bad name!' } })
 record('非法 preset 被拒绝', bad.status === 400, `status=${bad.status}`)

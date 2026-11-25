@@ -14,9 +14,9 @@ window.__ModuleLoader__.load({
       zh: {
         title: 'Superagent 控制台',
         subtitle: '每个工单独立会话与目录；主线只收三条短消息',
-        overview: '概览', ticketsTab: '工单', rolesTab: '角色', sourcesTab: '源', settingsTab: '设置',
+        overview: '概览', ticketsTab: '工单', sourcesTab: '源', settingsTab: '设置',
         noRoles: '还没有常驻角色。单会话遇到重复的活会用 delegate 带 role 派出，第一次出现时这里会自动建。',
-        roleName: '角色', roleWorkspace: '工作区', roleCreated: '创建时间', lastTask: '最近任务',
+        roleName: '角色', roleWorkspace: '工作区', lastTask: '最近任务',
         removeRole: '解除角色', roleRemoveConfirm: '解除这个常驻角色？会归档它的会话（角色笔记保留）。',
         roleRemoved: '已解除角色', delegateLimit: '临时子智能体并发上限', delegateQueued: '排队中',
         refresh: '刷新', close: '关闭', openRight: '在右栏打开', openConsole: '打开完整控制台',
@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
         qqSenders: '只收这些发送者（QQ 号/openid，逗号分隔；空=不限）', qqTargets: '只收这些群/好友会话（群号/openid，逗号分隔；空=不限）',
         host: '主机', port: '端口', guide: '看工单三态、操作与源配置',
         loadFailed: '加载失败', noHostService: '当前宿主没有这个服务', closeHint: '关闭后可从左侧栏图标重新打开',
-        workspace: '工作空间', wsPath: '目录', wsSession: '接单会话', wsPressure: '上下文占用',
+        workspace: '工作空间', wsPressure: '上下文占用',
         wsLastCompact: '上次压缩', wsNever: '还没压缩过', wsMissing: '无接单会话', wsRunning: '运行中',
         compactNow: '立即压缩', compacting: '压缩中…', compactOk: '已压缩', compactSkip: '宿主判断无需压缩',
         deleteSingle: '删除单会话', deleteSingleConfirm: '删除这个工作区的单会话登记？（当前会话不会被结束）', deleteSingleDone: '已删除单会话登记',
@@ -56,9 +56,9 @@ window.__ModuleLoader__.load({
       en: {
         title: 'Superagent console',
         subtitle: 'One session and directory per ticket; the main line gets three short messages',
-        overview: 'Overview', ticketsTab: 'Tickets', rolesTab: 'Roles', sourcesTab: 'Sources', settingsTab: 'Settings',
+        overview: 'Overview', ticketsTab: 'Tickets', sourcesTab: 'Sources', settingsTab: 'Settings',
         noRoles: 'No permanent roles yet. When the single session delegates repeat work with role names, they are created here on first use.',
-        roleName: 'Role', roleWorkspace: 'Workspace', roleCreated: 'Created', lastTask: 'Last task',
+        roleName: 'Role', roleWorkspace: 'Workspace', lastTask: 'Last task',
         removeRole: 'Remove role', roleRemoveConfirm: 'Remove this permanent role? Its session is archived (notes are kept).',
         roleRemoved: 'Role removed', delegateLimit: 'Temporary worker limit', delegateQueued: 'Queued',
         refresh: 'Refresh', close: 'Close', openRight: 'Open in right bar', openConsole: 'Open full console',
@@ -79,7 +79,7 @@ window.__ModuleLoader__.load({
         qqSenders: 'Only these senders (QQ id/openid, comma separated; empty = any)', qqTargets: 'Only these groups/chats (group id/openid, comma separated; empty = any)',
         host: 'Host', port: 'Port', guide: 'Ticket states, actions, and source settings',
         loadFailed: 'Load failed', noHostService: 'Host service unavailable', closeHint: 'Reopen from the left sidebar icon',
-        workspace: 'Workspace', wsPath: 'Path', wsSession: 'Intake session', wsPressure: 'Context usage',
+        workspace: 'Workspace', wsPressure: 'Context usage',
         wsLastCompact: 'Last compact', wsNever: 'never', wsMissing: 'no intake session', wsRunning: 'running',
         compactNow: 'Compact now', compacting: 'Compacting…', compactOk: 'Compacted', compactSkip: 'Host says nothing to compact',
         deleteSingle: 'Delete single session', deleteSingleConfirm: 'Remove the single-session registration of this workspace? (This session stays open.)', deleteSingleDone: 'Single-session registration removed',
@@ -100,32 +100,173 @@ window.__ModuleLoader__.load({
     const split = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean)
     const services = { right: null, workspace: null }
 
+    // 会话内任务板只看这个单会话的工单：目标会话匹配，或同一工作区。
+    // 与 lib/panel.js 的导出函数保持逐行一致；由 test/unit/console-store.test.js 做 parity。
+    function filterTicketsForSession(tickets, sessionId, workspaces = []) {
+      if (!sessionId) return tickets
+      const norm = (value) => String(value ?? '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+      const workspace = workspaces.find((item) => item.sessionId === sessionId)
+      const path = workspace?.path ? norm(workspace.path) : null
+      return tickets.filter((ticket) => ticket.targetSessionId === sessionId
+        || (path && ticket.workspace && norm(ticket.workspace) === path))
+    }
+
+    const POLL_MS = 5000
+    const BACKOFF_MAX_MS = 30000
+
+    function resourceUrl(resource) {
+      if (resource === 'status') return `${BASE}/status`
+      if (resource.startsWith('status:')) return `${BASE}/status?sessionId=${encodeURIComponent(resource.slice(7))}`
+      if (resource.startsWith('single:')) return `${BASE}/single?sessionId=${encodeURIComponent(resource.slice(7))}`
+      throw new Error(`unknown console resource: ${resource}`)
+    }
+
+    /**
+     * 极小的控制台数据层：按资源（status / status:<sessionId> / single:<sessionId>）
+     * 维护一份快照、一个定时器、一个在途请求。消费者只订阅，不各自 fetch。
+     * 纯函数边界、不依赖 React，`__internals` 暴露给单测。
+     */
+    function createConsoleStore(options = {}) {
+      const fetchImpl = options.fetch ?? ((url, init) => fetch(url, init))
+      const doc = options.document ?? (typeof document === 'undefined' ? null : document)
+      const baseDelayMs = options.intervalMs ?? POLL_MS
+      const maxDelayMs = options.maxDelayMs ?? BACKOFF_MAX_MS
+      const entries = new Map()
+      let disposed = false
+
+      const isHidden = () => doc?.hidden === true
+
+      function ensure(resource) {
+        let entry = entries.get(resource)
+        if (!entry) {
+          entry = { resource, listeners: new Set(), timer: null, inFlight: null, data: null, error: null, loading: true, updatedAt: 0, delayMs: baseDelayMs }
+          entries.set(resource, entry)
+        }
+        return entry
+      }
+
+      function snapshotOf(entry) {
+        return { data: entry.data, error: entry.error, loading: entry.loading, updatedAt: entry.updatedAt }
+      }
+
+      function notify(entry) {
+        const snapshot = snapshotOf(entry)
+        for (const listener of [...entry.listeners]) {
+          try { listener(snapshot) } catch { /* 单个消费者异常不影响其他消费者 */ }
+        }
+      }
+
+      function stop(entry) {
+        if (entry.timer) { clearTimeout(entry.timer); entry.timer = null }
+      }
+
+      function schedule(entry) {
+        stop(entry)
+        if (disposed || entry.listeners.size === 0 || isHidden()) return
+        entry.timer = setTimeout(() => {
+          entry.timer = null
+          if (disposed || entry.listeners.size === 0 || isHidden()) return
+          void loadResource(entry.resource)
+        }, entry.delayMs)
+      }
+
+      function loadResource(resource) {
+        const entry = ensure(resource)
+        if (disposed) return Promise.resolve(null)
+        if (entry.inFlight) return entry.inFlight
+        entry.loading = entry.data === null
+        const task = (async () => {
+          let ok = false
+          try {
+            const response = await fetchImpl(resourceUrl(resource), { cache: 'no-store' })
+            if (!response.ok) throw new Error(`HTTP ${response.status}`)
+            const data = await response.json()
+            if (disposed) return null
+            entry.data = data
+            entry.error = null
+            entry.loading = false
+            entry.updatedAt = Date.now()
+            entry.delayMs = baseDelayMs
+            ok = true
+          } catch (error) {
+            if (disposed) return null
+            entry.error = String(error?.message || error)
+            entry.loading = false
+            entry.delayMs = Math.min(maxDelayMs, Math.max(baseDelayMs, entry.delayMs * 2))
+          } finally {
+            entry.inFlight = null
+            if (!disposed) {
+              schedule(entry)
+              if (ok || entry.error) notify(entry)
+            }
+          }
+          return entry.data
+        })()
+        entry.inFlight = task
+        return task
+      }
+
+      function subscribe(resource, listener) {
+        const entry = ensure(resource)
+        const first = entry.listeners.size === 0
+        entry.listeners.add(listener)
+        listener(snapshotOf(entry))
+        if (first) void loadResource(resource)
+        return () => {
+          entry.listeners.delete(listener)
+          if (entry.listeners.size === 0) stop(entry)
+        }
+      }
+
+      function refresh(resource) {
+        const entry = ensure(resource)
+        stop(entry)
+        return loadResource(resource)
+      }
+
+      function onVisibilityChange() {
+        if (disposed) return
+        if (isHidden()) {
+          for (const entry of entries.values()) stop(entry)
+          return
+        }
+        for (const entry of entries.values()) {
+          if (entry.listeners.size === 0) continue
+          stop(entry)
+          void loadResource(entry.resource)
+        }
+      }
+
+      if (doc && typeof doc.addEventListener === 'function') doc.addEventListener('visibilitychange', onVisibilityChange)
+
+      function dispose() {
+        disposed = true
+        for (const entry of entries.values()) { stop(entry); entry.listeners.clear() }
+        entries.clear()
+        if (doc && typeof doc.removeEventListener === 'function') doc.removeEventListener('visibilitychange', onVisibilityChange)
+      }
+
+      return { subscribe, refresh, getSnapshot: (resource) => snapshotOf(ensure(resource)), dispose, urlFor: resourceUrl }
+    }
+
+    const consoleStore = createConsoleStore()
+
     function useT(ctx) {
       const [, force] = React.useReducer((x) => x + 1, 0)
       React.useEffect(() => ctx.locale.subscribe(() => force()), [ctx])
       return ctx.locale.bind(NS)
     }
 
-    function useStatus(ctx) {
-      const [state, setState] = React.useState({ loading: true, data: null, error: null })
-      const load = React.useCallback(async () => {
-        try {
-          const response = await fetch(`${BASE}/status`, { cache: 'no-store' })
-          if (!response.ok) throw new Error(`HTTP ${response.status}`)
-          const data = await response.json()
-          setState({ loading: false, data, error: null })
-        } catch (error) {
-          setState({ loading: false, data: null, error: String(error?.message || error) })
-        }
-      }, [])
+    // 订阅 consoleStore 的某个资源；同一资源的所有消费者共享一个快照与一个定时器。
+    function useConsoleResource(resource) {
+      const [snapshot, setSnapshot] = React.useState(() => resource ? consoleStore.getSnapshot(resource) : { data: null, error: null, loading: false, updatedAt: 0 })
       React.useEffect(() => {
-        let alive = true
-        const tick = () => { if (alive) load() }
-        tick()
-        const timer = setInterval(tick, 5000)
-        return () => { alive = false; clearInterval(timer) }
-      }, [load])
-      return { ...state, reload: load }
+        if (!resource) return undefined
+        setSnapshot(consoleStore.getSnapshot(resource))
+        return consoleStore.subscribe(resource, setSnapshot)
+      }, [resource])
+      const reload = React.useCallback(() => (resource ? consoleStore.refresh(resource) : Promise.resolve(null)), [resource])
+      return { ...snapshot, reload }
     }
 
     async function post(path, body) {
@@ -304,23 +445,9 @@ window.__ModuleLoader__.load({
     function SingleSessionPill(props) {
       const t = useT(props.ctx)
       const sessionId = props.sessionId
-      const [state, setState] = React.useState(null)
+      // 登记按钮也订阅 consoleStore，不再自己起定时器。
+      const { data: state, reload: load } = useConsoleResource(sessionId ? `single:${sessionId}` : null)
       const [busy, setBusy] = React.useState(false)
-      const load = React.useCallback(async () => {
-        if (!sessionId) return
-        try {
-          const response = await fetch(`${BASE}/single?sessionId=${encodeURIComponent(sessionId)}`, { cache: 'no-store' })
-          if (!response.ok) return
-          setState(await response.json())
-        } catch {
-          /* 状态拿不到就不显示 */
-        }
-      }, [sessionId])
-      React.useEffect(() => {
-        load()
-        const timer = setInterval(load, 5000)
-        return () => clearInterval(timer)
-      }, [load])
       const turnOn = async () => {
         setBusy(true)
         try {
@@ -372,24 +499,9 @@ window.__ModuleLoader__.load({
     function SessionBoard(props) {
       const t = useT(props.ctx)
       const sessionId = props.sessionId
-      const [tickets, setTickets] = React.useState([])
-      React.useEffect(() => {
-        if (!sessionId) return undefined
-        let alive = true
-        const load = async () => {
-          try {
-            const response = await fetch(`${BASE}/status?sessionId=${encodeURIComponent(sessionId)}`, { cache: 'no-store' })
-            if (!response.ok) return
-            const data = await response.json()
-            if (alive) setTickets(Array.isArray(data.tickets) ? data.tickets : [])
-          } catch {
-            /* 控制台不可用时任务板静默 */
-          }
-        }
-        load()
-        const timer = setInterval(load, 5000)
-        return () => { alive = false; clearInterval(timer) }
-      }, [sessionId])
+      // 任务板保留 ?sessionId= 独立资源：服务端先按会话过滤再切 100，不并全局 /status。
+      const { data } = useConsoleResource(sessionId ? `status:${sessionId}` : null)
+      const tickets = Array.isArray(data?.tickets) ? data.tickets : []
       // 未终态（queued/running/waiting）全部显示；done/failed 只补最近几条，总数最多 20。
       const ordered = [...tickets].reverse()
       const active = ordered.filter((item) => item.status !== 'done' && item.status !== 'failed').slice(0, 20)
@@ -423,7 +535,7 @@ window.__ModuleLoader__.load({
 
     function Console({ ctx, compact = false, onClose }) {
       const t = useT(ctx)
-      const { data, error: loadError, reload } = useStatus(ctx)
+      const { data, error: loadError, reload } = useConsoleResource('status')
       const [tab, setTab] = React.useState('overview')
       const [form, setForm] = React.useState(null)
       const [msg, setMsg] = React.useState('')
@@ -885,6 +997,8 @@ window.__ModuleLoader__.load({
 
     return {
       inject: ['slots', 'layout', 'locale'],
+      // D9 测试缝：只读暴露纯函数与数据层入口，不参与渲染。
+      __internals: { createConsoleStore, filterTicketsForSession, buildForm, formPayload, DICT },
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { zh: DICT.zh, en: DICT.en }))
 

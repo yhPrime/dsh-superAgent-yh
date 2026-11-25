@@ -1,23 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 
-const source = readFileSync(new URL('../../client.js', import.meta.url), 'utf8')
-
-function loadClient() {
-  let captured = null
-  const windowStub = { __ModuleLoader__: { load: (definition) => { captured = definition } } }
-  const ReactStub = { createElement: (...args) => args, useReducer: (initial) => [initial, () => {}], useState: (initial) => [initial, () => {}], useEffect: () => {}, useCallback: (fn) => fn, useMemo: (fn) => fn() }
-  const requireStub = (name) => {
-    if (name === 'react') return ReactStub
-    throw new Error(`unexpected require ${name}`)
-  }
-  // eslint-disable-next-line no-new-func
-  new Function('window', 'require', source)(windowStub, requireStub)
-  assert.ok(captured, 'client.js 应该调用 __ModuleLoader__.load')
-  assert.equal(captured.id, 'dsh-superagent-yh')
-  return captured.factory(requireStub)
-}
+import { clientSource as source, loadClient } from '../tools/client-source.mjs'
 
 test('client 模块：注册左栏图标、主面板、右侧页签类型', () => {
   const mod = loadClient()
@@ -86,4 +70,46 @@ test('client 模块：没有 better-sidebar 时不注册右栏，也不抛错', 
   assert.doesNotThrow(() => mod.apply(ctx))
   assert.ok(slots.some((entry) => entry.options.name === 'main'))
   assert.ok(!slots.some((entry) => entry.options.name === 'sidebar.right.pane.tab'))
+})
+
+test('client 模块：控制台五条路由的客户端调用面存在', () => {
+  const internals = loadClient().__internals
+  const store = internals.createConsoleStore({ document: null, fetch: async () => ({ ok: true, json: async () => ({}) }) })
+  assert.match(store.urlFor('status'), /\/status$/)
+  assert.match(store.urlFor('status:s1'), /\/status\?sessionId=s1$/)
+  assert.match(store.urlFor('single:s1'), /\/single\?sessionId=s1$/)
+  store.dispose()
+
+  // /log、/action、/settings 走 post/fetch 字面量，路由名必须留在客户端调用面上。
+  assert.match(source, /post\('\/action'/, '缺少 /action 调用')
+  assert.match(source, /post\('\/settings'/, '缺少 /settings 调用')
+  assert.match(source, /\/log\?ticketId=/, '缺少 /log 调用')
+})
+
+test('client 模块：配置侧 token 掩码，表单与提交 payload 都不含明文', () => {
+  const internals = loadClient().__internals
+  const secrets = ['ghp_PLAINTEXT_abc123', 'feishu_secret_xyz', 'qq_http_tok', 'qq_ws_tok', 'qq_official_tok']
+  const config = {
+    dryRun: false, mainSessionId: 'main-1', repoPath: 'D:\\repo', pollIntervalMs: 60000, workerPreset: 'preset',
+    sources: {
+      github: { enabled: true, repo: 'a/b', labels: ['x'], authors: [], apiBase: 'https://api', confirmWrites: false, token: secrets[0], hasToken: true },
+      feishu: { enabled: false, appId: 'app', chatIds: [], authors: [], requireMention: true, confirmWrites: false, appSecret: secrets[1], hasSecret: true },
+      qq: {
+        enabled: false, mode: 'official', requireAt: true, authors: [], allowedGroups: [], confirmWrites: false,
+        personal: { httpUrl: 'http://127.0.0.1:1', wsUrl: 'ws://127.0.0.1:2', selfId: '1', snowLumaDir: 'd', httpToken: secrets[2], wsToken: secrets[3], hasHttpToken: true, hasWsToken: true },
+        official: { host: '127.0.0.1', port: 3000, token: secrets[4], hasToken: true },
+      },
+    },
+  }
+  const singleSession = { enabled: true, idleMinutes: 30, pressureRatio: 0.5, aggressive: false, keepRecentTurns: 2, sessionIdPrefix: 'intake', preset: 'p' }
+  const form = internals.buildForm(config, singleSession)
+  const payload = internals.formPayload(form)
+  const visible = JSON.stringify(form) + JSON.stringify(payload)
+  for (const secret of secrets) assert.ok(!visible.includes(secret), `表单/payload 泄漏明文 token：${secret.slice(0, 4)}…`)
+  assert.equal(form.github.token, '')
+  assert.equal(form.feishu.appSecret, '')
+  assert.equal(form.qq.official.token, '')
+  assert.equal(form.github.hasToken, true, '掩码后仍应保留已配置标记')
+  assert.equal(form.feishu.hasSecret, true)
+  assert.equal(form.qq.personal.hasHttpToken, true)
 })

@@ -50,6 +50,7 @@ test('delegate：不带 role 走临时子智能体，带 worker preset', async (
   assert.equal(h.calls.activations.length, 1)
   assert.equal(h.calls.activations[0].provider, 'spawn')
   assert.equal(h.calls.activations[0].agentPreset, 'worker-x')
+  assert.ok(h.calls.activations[0].signal, 'startActivation 必须带 AbortSignal')
   h.delegate.dispose()
 })
 

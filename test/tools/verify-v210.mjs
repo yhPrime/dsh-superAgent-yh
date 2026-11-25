@@ -3,6 +3,10 @@
  * 用法：node test/tools/verify-v210.mjs [baseUrl] [--console]
  *       node test/tools/verify-v210.mjs console [baseUrl]
  *
+ * 退出码：0 全通过 · 1 断言失败 · 2 连不上（清晰失败，不是未捕获异常/挂死）。
+ * 前置：先启动 DSH（baseUrl 默认 http://127.0.0.1:54196，端口以本机 DSH 启动日志为准）；
+ *       不想起 DSH 时用 mock：node test/tools/console-regression.mjs（自动起 mock 并跑本脚本）。
+ *
  * 默认只验版本、preset、设置读写（历史调用方式不变）。
  * 加 --console / console 子命令时，额外对 /status /single /log /action /settings
  * 做控制台冒烟：HTTP 状态 + JSON 形状 + 不出现明文 token。
@@ -24,20 +28,35 @@ const record = (name, ok, detail) => {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ` · ${detail}` : ''}`)
 }
 
-async function get(path) {
-  const res = await fetch(`${api}${path}`)
-  return { status: res.status, body: await res.json().catch(() => null) }
+// 每个请求 5s 超时：服务不在/半死时给出可判失败，不挂死。
+const REQUEST_TIMEOUT_MS = 5000
+async function request(path, options = {}) {
+  try {
+    const res = await fetch(`${api}${path}`, { ...options, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+    return { status: res.status, body: await res.json().catch(() => null) }
+  } catch (error) {
+    const code = error?.cause?.code || error?.name || 'network'
+    return { status: 0, body: null, error: `${path} ${code}` }
+  }
 }
-async function post(path, payload) {
-  const res = await fetch(`${api}${path}`, {
+const get = (path) => request(path)
+const post = (path, payload) =>
+  request(path, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-superagent': '1' },
     body: JSON.stringify(payload),
   })
-  return { status: res.status, body: await res.json().catch(() => null) }
-}
 
+console.log(`验证目标：${api}${wantsConsole ? '（含 --console 五路由冒烟）' : ''}`)
 const status = await get('/status')
+if (status.status === 0) {
+  console.error(`\nFAIL 无法连接 ${base}（${status.error}）`)
+  console.error('前置：先启动 DSH，端口以本机启动日志为准，例如：')
+  console.error('  node test/tools/verify-v210.mjs http://127.0.0.1:<端口> --console')
+  console.error('没有 DSH 时用 mock（一条命令）：node test/tools/console-regression.mjs')
+  process.exitCode = 2
+  process.exit(2)
+}
 const config = status.body?.config ?? {}
 record('状态可读', status.status === 200, `status=${status.status}`)
 record('版本 0.9.6', config.version === '0.9.6', `version=${config.version}`)

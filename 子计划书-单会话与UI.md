@@ -100,6 +100,7 @@
 
 - 每轮 `maintain()` 对已登记单会话取 `sessionController.list()` 里 `parentSessionId === 单会话id && origin === 'subagent'` 的子会话。
 - 去重：已被插件工单管线占用（`childSessionId` 已在别的工单里）的不重复纳管；已纳管的只做状态推进。
+- **读历史必须用 subagent 地址**（0.9.4 真机教训）：宿主 `validateAddress` 只承认 `{kind:'subagent', parentSessionId, childSessionId, mode}`；用 `{kind:'session'}` 读 `origin=subagent` 的会话会被拒（`session/agent-busy`「subagent Sessions require their durable parent address」），异常若被吞成空数组，子会话就永远判 unknown、永不纳管亦不归档。`mode` 传 `unknown` 由宿主按 descriptor 判定。
 - 判定见 `lib/child-tickets.js:classifyChild`：`tool/call` 优先；回声正则 `/^(?:只|请)?(?:回复|回答|说|答)…(?:ok|好|收到)/i` 判噪音；prompt 阈值 40/80 字符。
 - 归档：`workspaceRegistry.archiveSession(id,{stopActivity:true})`（跳过活动检查）；失败退避写 `state.lastError`；`state.singleSessionChildNoise` 记噪音判定避免重读事件。
 - 已完成才被发现的子会话只登记成 `done`，**不补发 relay**（避免翻旧账刷屏）；正在跑的补一条 `started`。

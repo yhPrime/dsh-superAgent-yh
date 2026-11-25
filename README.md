@@ -97,7 +97,7 @@ $dsh = "<DSH 安装目录>\resources\runtime\cli\bin\dsh.cmd"   # 或已加入 P
 lib/           插件代码（index/config/store/ticket/executor/relay/panel/redact + source/）
 test/           单元测试、假源、会话日志解码工具
 docs/           计划书报告、移植笔记、QQ 接入说明
-cordis.patch.yml 插件行 + worker preset
+cordis.patch.yml 插件行 + worker / 纯调度 dispatcher 两个 preset
 locale/         zh/en 显示名与说明
 ```
 

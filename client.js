@@ -40,7 +40,7 @@ window.__ModuleLoader__.load({
         singleTitle: '单会话模式', singleHint: '每个工作空间只保留一个接单会话；空闲或上下文超阈值时自动压缩旧上下文。worker 仍每工单独立。',
         singleEnabled: '启用单会话模式', idleMinutes: '空闲多少分钟后压缩', pressureRatio: '上下文占用超过此比例也压缩',
         aggressive: '超级压缩（只保留最近几轮）', keepRecentTurns: '超级压缩保留最近几轮', autoCreate: '没有接单会话时自动创建',
-        sessionIdPrefix: '会话 id 前缀', singlePreset: '单会话 preset（默认 minimal 极简模式）',
+        sessionIdPrefix: '会话 id 前缀', singlePreset: '单会话 preset（默认纯调度 dsh-superagent-yh-dispatcher）',
         recent: '最近活动', sourceHealth: '源健康', noSources: '还没有启用任何源。',
         stateOk: '正常', stateFail: '异常', watermark: '水位', added: '本轮新增',
         confirmCompact: '压缩可能消耗一次模型调用，确定现在压缩？',
@@ -77,7 +77,7 @@ window.__ModuleLoader__.load({
         singleTitle: 'Single-session mode', singleHint: 'Each workspace keeps one intake session; old context is compacted when idle or over the threshold. Workers stay per-ticket.',
         singleEnabled: 'Enable single-session mode', idleMinutes: 'Compact after idle (minutes)', pressureRatio: 'Compact when context usage exceeds',
         aggressive: 'Aggressive (keep only recent turns)', keepRecentTurns: 'Turns to keep when aggressive', autoCreate: 'Create an intake session when missing',
-        sessionIdPrefix: 'Session id prefix', singlePreset: 'Single-session preset (default: minimal)',
+        sessionIdPrefix: 'Session id prefix', singlePreset: 'Single-session preset (default: dsh-superagent-yh-dispatcher)',
         recent: 'Recent activity', sourceHealth: 'Source health', noSources: 'No source enabled yet.',
         stateOk: 'OK', stateFail: 'Error', watermark: 'Watermark', added: 'Added',
         confirmCompact: 'Compacting may cost one model call. Compact now?',
@@ -154,7 +154,7 @@ window.__ModuleLoader__.load({
           keepRecentTurns: String(singleSession?.keepRecentTurns ?? 2),
           autoCreate: singleSession?.autoCreate !== false,
           sessionIdPrefix: singleSession?.sessionIdPrefix || 'intake',
-          preset: singleSession?.preset || 'minimal',
+          preset: singleSession?.preset || 'dsh-superagent-yh-dispatcher',
         },
       }
     }

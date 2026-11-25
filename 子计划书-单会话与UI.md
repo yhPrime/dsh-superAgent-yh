@@ -1,6 +1,8 @@
 # 子计划书 · 单会话（会话内智能体团队）+ UI
 
-> 版本：v2.9.1（**定稿**）｜状态：**定稿（2026-11-25 补 D29 preset 漂移纠回）**｜上次定稿：v2.9（2026-11-24）｜权威范围：单会话模式的「表现形式与执行形态」+ 控制台 UI。不改源协议、不改主线 relay。
+> 版本：v2.10（**定稿**）｜状态：**定稿（2026-11-25 用户选 A：单会话改纯调度 preset）**｜上次定稿：v2.9.1（2026-11-25）｜权威范围：单会话模式的「表现形式与执行形态」+ 控制台 UI。不改源协议、不改主线 relay。
+>
+> **v2.10 修订（2026-11-25 用户拍板 A）**：真机复查证明 `minimal` 挡不住「单会话自己干活」——极简模式在 Windows 上仍挂 `terminal-pwsh`/`persistent-pwsh`，且 `ops_bash`/`exp_recall` 这类 **profile 级全局工具不受 preset 约束**（见 D29 后实测）。用户选 A：自建 **纯调度 preset `dsh-superagent-yh-dispatcher`** —— 只保留 `persona`（调度者）、`subagent`（spawn，`agentPreset` 固定为 worker）、`compaction`，再加一个守卫插件用 `ctx.tools.restrict({deny})` 把该会话可见的**全局工具**全部隐藏；`singleSession.preset` 默认改为该 id。worker/子智能体仍拿完整工具面。
 >
 > **v2.9.1 补丁（2026-11-25）**：真机发现登记成功后 preset 会被改回 `ptc`（会话首轮前的竞态：新建会话的 preset 座位把暂存值 apply 到会话上），会话一开首轮就再也切不回来。补 D29：监听宿主 `agent-preset/selected`，已登记会话上出现非 `single.preset` 的值且会话仍空白时立刻纠回（每次会话最多 3 次防抖），已开始的会话只记一次日志；不新增 UI、不改交互。
 >
@@ -224,6 +226,7 @@
 | T3 | TeamTaskBoard UI + 注册 slot | 客户端 smoke + 页面走查 | 0.5 天 |
 | T4 | 集成验收：一条工单 → 会话内出现成员与任务 → 完成 → 任务板变绿、侧栏不新增会话 | 真实跑通 | 0.5 天 |
 | T5 | **v2.9 落地**：`singleSession.preset='minimal'` + 删重 preset + worker 显式 `agentPreset` + orchestrator 走 `ctx.llm` + relay 投 `targetSessionId` | E12.17–E12.19 全绿，四路测试通过 | 0.5 天 |
+| T6 | **v2.10 落地（纯调度）**：新增 preset `dsh-superagent-yh-dispatcher`（persona + subagent(spawn, agentPreset=worker) + compaction + `lib/dispatcher.js` 守卫 `tools.restrict({deny: 全部全局工具})`）；`singleSession.preset` 默认改为该 id；client 默认值/文案同步 | E12.20/E12.21 真机成立，四路测试通过 | 0.5 天 |
 
 约 1.75 天。
 
@@ -250,6 +253,8 @@
 | E12.17 | **单会话默认极简**：未改配置时登记后该会话 preset = `minimal`（宿主 UI 显示「极简模式」）；解除后切回原 preset、不残留 |
 | E12.18 | **worker 不继承父 preset**：子智能体激活参数里 `agentPreset = dsh-superagent-yh-worker`，其会话内 bash/fs 工具可用 |
 | E12.19 | **单会话只增必要上下文**：一张工单跑完，单会话历史只增加 relay 短消息（+ 路由一问一答，若 D28 选 1）；无插件 persona / 工具 schema / 长 mandate 注入 |
+| E12.20 | **单会话工具面只剩调度**：登记后的会话可见工具里没有 `ops_bash`/`ops_*`/`exp_*` 等 profile 级全局工具，也没有 shell/fs；只有 `subagent`（+ 压缩命令），模型调用被隐藏工具时能收到明确拒绝而不是执行 |
+| E12.21 | **worker 工具面不受影响**：spawn 出来的 worker 仍有 bash/fs/search 等完整工具（restrict 不遗传给子智能体），并带 `dsh-superagent-yh-worker` preset |
 
 ## 5 风险
 
@@ -292,4 +297,5 @@
 - **D28**（2026-11-24 用户拍板，v2.9 定稿）：单会话**默认跑宿主极简模式**（`singleSession.preset='minimal'`），不再切重调度者 preset；删 `dsh-superagent-yh-orchestrator-preset` 与 `config.orchestratorPreset`；worker 由 `startActivation({agentPreset: config.workerPreset})` 显式指定；插件只向单会话拼接必要上下文（用户的话 + relay 三条短消息）。**路由已选选项 2**：`ctx.llm` 一次性调用判定，单会话内不留路由问答；超时/格式错回退 `rules` 并记 `lastError`。
 - **D29**（2026-11-25 实现 D28 时发现的竞态，按 D28 意图直接补）：已登记单会话上必须稳定停在 `single.preset`。宿主 `agent-presets` 的座位可能把新建会话时暂存的默认 preset 在登记后 `apply` 到会话上（真机日志：登记切 `minimal` 成功，19 秒后 `agent-preset/selected=ptc`），而会话开首轮后 `select` 永远被拒（"This session has already started"）。插件订阅宿主 `agent-preset/selected`，对已登记会话纠回（空白会话才切、每次最多 3 次、已开始只记一次日志）。
 - 已确认口径（2026-11-24）：**很像智能体团队，但不是完全一样**——借鉴表现形式，不复制其开关/组件/任务语义（§1.1）。
+- **D30**（2026-11-25 用户选 A）：**单会话 = 纯调度者**。`minimal` 挡不住动手（win32 仍有 pwsh shell；profile 级全局 `ops_bash`/`exp_recall` 不受 preset 约束）。自建 preset `dsh-superagent-yh-dispatcher`：`persona` 只讲调度；`tool-subagent`（`provider: spawn`、`toolName: subagent`、`agentPreset: dsh-superagent-yh-worker`、`allowedAgentPresets: [dsh-superagent-yh-worker]`）；`compaction` 组；`lib/dispatcher.js` 在该会话 scope 注册时用 `ctx.tools.restrict({ deny: 全局工具 })` 隐藏全局工具（不含 `run_code`）。`singleSession.preset` 默认改为该 id；worker 保持完整工具面。
 - **2026-11-24 用户拍板 D14–D23，本文件定稿（v2.5）**，按 T1→T4 执行；四路测试按迭代规则跑完再收口。

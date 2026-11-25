@@ -100,18 +100,18 @@ test('unregister：撤销登记 + unpin；removeSingle：先注销再归档', as
   assert.equal(h.calls.archive, 1)
 })
 
-test('register：切到极简 preset（默认 minimal）并记住原 preset；解除时切回', async () => {
+test('register：切到纯调度 preset（默认 dispatcher）并记住原 preset；解除时切回', async () => {
   const h = harness()
   await h.maintainer.register('s1')
-  assert.deepEqual(h.calls.selected, ['minimal'])
+  assert.deepEqual(h.calls.selected, ['dsh-superagent-yh-dispatcher'])
   assert.equal(h.store.state.singleSessionPrevPreset.w1, 'standard')
 
   await h.maintainer.unregister('s1')
-  assert.deepEqual(h.calls.selected, ['minimal', 'standard'])
+  assert.deepEqual(h.calls.selected, ['dsh-superagent-yh-dispatcher', 'standard'])
   assert.equal(h.store.state.singleSessionPrevPreset.w1, undefined)
 })
 
-test('register：singleSession.preset 可覆盖默认 minimal', async () => {
+test('register：singleSession.preset 可覆盖默认值', async () => {
   const h = harness({ config: { singleSession: { enabled: true, preset: 'ptc' } } })
   await h.maintainer.register('s1')
   assert.deepEqual(h.calls.selected, ['ptc'])
@@ -192,15 +192,15 @@ test('开关关闭：maintain / snapshot / list 都是空', async () => {
   assert.equal((await off.maintainer.snapshot()).enabled, false)
 })
 
-test('onPresetSelected：未登记/同 preset 不动；空会话被改回 minimal；已开始只提示一次', async () => {
+test('onPresetSelected：未登记/同 preset 不动；空会话被改回默认 preset；已开始只提示一次', async () => {
   const h = harness()
   assert.equal((await h.maintainer.onPresetSelected('other', 'ptc')).ignored, 'not-registered')
-  await h.maintainer.register('s1') // 登记后 preset 已是 minimal
+  await h.maintainer.register('s1') // 登记后 preset 已是默认值
   h.calls.selected.length = 0
-  assert.equal((await h.maintainer.onPresetSelected('s1', 'minimal')).ignored, 'same')
+  assert.equal((await h.maintainer.onPresetSelected('s1', 'dsh-superagent-yh-dispatcher')).ignored, 'same')
   const out = await h.maintainer.onPresetSelected('s1', 'ptc')
   assert.deepEqual(out, { ok: true, reverted: true })
-  assert.deepEqual(h.calls.selected, ['minimal'])
+  assert.deepEqual(h.calls.selected, ['dsh-superagent-yh-dispatcher'])
 
   const started = harness({ blank: false })
   started.store.state.singleSessions.w1 = 's1'

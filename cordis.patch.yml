@@ -94,3 +94,48 @@
                   thresholdChars: 8192
                   headChars: 4096
                   tailChars: 1024
+    # 单会话「纯调度」preset（D30）：只留调度 persona、派活工具和压缩；
+    # dispatcher 守卫把 profile 级全局工具（ops_bash/exp_recall 等）在本会话隐藏。
+    - id: dsh-superagent-yh-dispatcher-preset
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: dsh-superagent-yh-dispatcher
+        name: dsh-superAgent-yh 调度者
+        description: dsh-superAgent-yh 单会话专用：只负责接任务、派 worker、汇总回报，不自己动手。
+        order: 91
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |-
+                You are the dispatcher of this workspace's Superagent session. You never do the work yourself: you have no shell, file, search, or editing tools.
+                When the user asks for real work, delegate it with the `subagent` tool. Write a complete, self-contained task prompt (workspace directory, what to do, how to verify), one worker per independent piece, and let workers run in parallel.
+                Afterwards summarize each worker's report in two or three sentences: what changed, where, and what is still open. Answer small talk directly. Reply in the user's language.
+          - id: tool-subagent
+            name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: spawn
+              toolName: subagent
+              agentPreset: dsh-superagent-yh-worker
+              allowedAgentPresets:
+                - dsh-superagent-yh-worker
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
+          - id: dispatcher-guard
+            name: dsh-superagent-yh/dispatcher
+            config: {}

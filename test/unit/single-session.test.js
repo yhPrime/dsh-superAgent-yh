@@ -43,7 +43,7 @@ function harness({
   renameNormalize = (title) => title, renameNoReturn = false, applyRename = true,
   children = [], childRecords = {}, childArchiveError = null, childReadError = null,
   presetId = 'standard', useRealCompaction = false, compactionEngine = null,
-  unarchiveError = null,
+  unarchiveError = null, pinArchivedUntilUnarchive = false,
 } = {}) {
   const calls = { pin: 0, unpin: 0, archive: 0, archiveChild: 0, unarchive: 0, compact: 0, selected: [], rename: 0, titles: [], accepted: [], relay: [], childReads: [], logs: [] }
   const store = { state: { singleSessions: {}, singleSession: {}, lastError: null }, save() {} }
@@ -77,7 +77,12 @@ function harness({
         if (childReadError) throw new Error(childReadError)
         return { records: childRecords[child.sessionId] ?? [], page: { cursor: 'p1' } }
       },
-      pinSession: async () => { if (pinError) throw new Error(pinError); calls.pin += 1 },
+      pinSession: async () => {
+        // 0.9.8：宿主对已归档会话的 pin 直接拒绝，这里用同一错误模拟「被归档」。
+        if (pinArchivedUntilUnarchive && calls.unarchive === 0) throw new Error('session is archived')
+        if (pinError) throw new Error(pinError)
+        calls.pin += 1
+      },
       unpinSession: async () => { calls.unpin += 1 },
       archiveSession: async () => { calls.archive += 1 },
       unarchiveSession: async () => { if (unarchiveError) throw new Error(unarchiveError); calls.unarchive += 1 },
@@ -325,6 +330,24 @@ test('onPresetSelected：未登记/同 preset 不动；空会话被改回默认 
   const skip = await started.maintainer.onPresetSelected('s1', 'ptc')
   assert.equal(skip.ignored, 'started')
   assert.deepEqual(started.calls.selected, [])
+})
+
+test('ensureVisible：登记会话被归档过就 unarchive 再 pin，恢复侧栏可见', async () => {
+  const h = harness({ pinArchivedUntilUnarchive: true })
+  const out = await h.maintainer.ensureVisible('s1')
+  assert.deepEqual(out, { ok: true, restored: true })
+  assert.equal(h.calls.unarchive, 1)
+  assert.ok(h.calls.pin >= 1)
+  // 归档标记去掉后 pin 正常：再调一次不该再 unarchive。
+  assert.deepEqual(await h.maintainer.ensureVisible('s1'), { ok: true, pinned: true })
+  assert.equal(h.calls.unarchive, 1)
+  assert.ok(h.calls.logs.some((line) => line.includes('restored visibility: s1')))
+})
+
+test('ensureVisible：unarchive 失败只记日志，不抛', async () => {
+  const h = harness({ pinArchivedUntilUnarchive: true, unarchiveError: 'boom' })
+  assert.deepEqual(await h.maintainer.ensureVisible('s1'), { ok: false, ignored: 'error' })
+  assert.ok(h.calls.logs.some((line) => line.includes('restore visibility s1 failed')))
 })
 
 test('onArchived：已登记的单会话被归档就拉回来；未登记/未开启不动；失败只记日志', async () => {

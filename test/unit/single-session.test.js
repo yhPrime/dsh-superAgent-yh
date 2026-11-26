@@ -93,7 +93,7 @@ function harness({
       },
       relay: { send: async (ticket, kind) => { calls.relay.push({ id: ticket.id, kind }) } },
       resolveByPath: async () => workspaces[0],
-      resolveAgent: async () => ({ agent }),
+      resolveAgent: async () => { calls.resolveAgent = (calls.resolveAgent ?? 0) + 1; return { agent } },
       presetOf: () => presetId,
       isBlank: () => blank,
       renameSession: async ({ sessionId, title }) => {
@@ -750,4 +750,24 @@ test('D51：workerArchive:false 时 maintain 不做过期兜底', async () => {
   const result = await h.maintainer.maintain()
   assert.deepEqual(h.calls.archivedChildren ?? [], [])
   assert.equal(result.staleWorkers.archived, 0)
+})
+
+test('maintain：会话是冷的（宿主无 agent）就跳过压缩，绝不强行 resume（0.9.10）', async () => {
+  const h = harness({
+    agentAlive: false,
+    pressure: { pressureTokens: 900, contextWindow: 1000 },
+  })
+  await h.maintainer.register('s1')
+  const resolvedByRegister = h.calls.resolveAgent
+  await h.maintainer.maintain()
+  assert.equal(h.calls.compact, 0)
+  assert.equal(h.store.state.singleSession.s1, undefined)
+  // 关键：没有去 resolveAgent 强行载入会话（否则宿主 prepare/release 会让侧栏那一行消失）。
+  assert.equal(h.calls.resolveAgent, resolvedByRegister)
+})
+
+test('compactSession：会话是冷的就返回 skipped，不强行 resume（0.9.10）', async () => {
+  const h = harness({ agentAlive: false })
+  const out = await h.maintainer.compactSession('s1')
+  assert.deepEqual(out, { skipped: true, reason: 'cold' })
 })

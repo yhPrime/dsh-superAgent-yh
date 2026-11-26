@@ -102,7 +102,7 @@ window.__ModuleLoader__.load({
     }
 
     const split = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean)
-    const services = { right: null, workspace: null }
+    const services = { right: null, workspace: null, sessions: null }
 
     // 会话内任务板只看这个单会话的工单：目标会话匹配，或同一工作区。
     // 与 lib/panel.js 的导出函数保持逐行一致；由 test/unit/console-store.test.js 做 parity。
@@ -682,7 +682,14 @@ window.__ModuleLoader__.load({
       )
     }
 
-    function OverviewView({ t, data, stats, tickets, sourceHealth, enabledSources, busySession, onStatPick, onOpenSession, onCompactNow, onDeleteSingle }) {
+    function listLine(snap, sessionId) {
+      if (!snap) return '客户端列表：读取中…'
+      const entry = snap.byId?.[sessionId]
+      if (!entry) return '客户端列表：✗ 缺这条（侧栏会移除，点击报 unknown session）'
+      return `客户端列表：✓ blank=${entry.blank === true} origin=${entry.origin ?? '—'} running=${entry.running === true}`
+    }
+
+    function OverviewView({ t, data, stats, tickets, sourceHealth, enabledSources, busySession, listSnap, onStatPick, onOpenSession, onCompactNow, onDeleteSingle }) {
       return h('div', null,
         h(StatCards, { t, stats, onPick: onStatPick }),
         h('div', { className: 'syh-card' },
@@ -703,6 +710,7 @@ window.__ModuleLoader__.load({
                       h('div', { className: 'syh-ws-meta' }, `${t('wsPressure')}: ${workspace.pressureTokens}/${workspace.contextWindow || '?'} (${Math.round((workspace.ratio || 0) * 100)}%)`),
                       h(PressureBar, { ratio: workspace.ratio || 0 }),
                     ),
+                    workspace.sessionId ? h('div', { className: 'syh-ws-meta', style: { marginTop: 4 } }, listLine(listSnap, workspace.sessionId)) : null,
                   ),
                   h('div', { style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' } },
                     h('span', { className: `syh-badge syh-${workspace.running ? 'running' : workspace.status === 'missing' ? 'failed' : 'done'}` }, workspace.running ? t('wsRunning') : (workspace.status || 'idle')),
@@ -993,6 +1001,15 @@ window.__ModuleLoader__.load({
         }
       }, [data, form])
 
+      // 诊断：已登记会话在客户端列表快照里的真实状态（在不在、blank、origin），只读订阅。
+      const [listSnap, setListSnap] = React.useState(null)
+      React.useEffect(() => {
+        const store = services.sessions?.list
+        if (!store?.getSnapshot) return undefined
+        setListSnap(store.getSnapshot())
+        return store.subscribe?.(() => setListSnap(store.getSnapshot()))
+      }, [])
+
       // S4 表单 dirty 保护 + S5 面板内确认：脏时把离开动作挂到确认条，确定后才执行。
       const dirty = isFormDirty(form, baseline)
       const [pendingConfirm, setPendingConfirm] = React.useState(null)
@@ -1081,10 +1098,17 @@ window.__ModuleLoader__.load({
         setMsg(t('roleRemoved'))
       }))
 
+      // 打开已登记会话：宿主 openSession 先 retain，retain 只认客户端列表快照里的 id；
+      // 快照里没有就抛 "sessions.retain: unknown session"，这里原样报出，不做自愈式重试。
       const openSession = (sessionId) => {
         const workspace = services.workspace
         if (!workspace?.openSession) { setError(t('noHostService')); return }
-        try { workspace.openSession(sessionId) } catch (reason) { setError(String(reason?.message || reason)) }
+        try {
+          workspace.openSession(sessionId)
+          setError('')
+        } catch (reason) {
+          setError(String(reason?.message || reason))
+        }
       }
 
       const showLog = (ticket) => run(async () => {
@@ -1115,7 +1139,7 @@ window.__ModuleLoader__.load({
 
       let body
       if (tab === 'overview') {
-        body = h(OverviewView, { t, data, stats, tickets, sourceHealth, enabledSources, busySession, onStatPick: pickStat, onOpenSession: openSession, onCompactNow: compactNow, onDeleteSingle: deleteSingle })
+        body = h(OverviewView, { t, data, stats, tickets, sourceHealth, enabledSources, busySession, listSnap, onStatPick: pickStat, onOpenSession: openSession, onCompactNow: compactNow, onDeleteSingle: deleteSingle })
       } else if (tab === 'tickets') {
         body = h(TicketsView, { t, tickets, filter, onFilter: setFilter, query, onQuery: setQuery, log, onCloseLog: () => setLog(null), onAct: act, onOpenSession: openSession, onShowLog: showLog })
       } else if (tab === 'roles') {
@@ -1179,6 +1203,11 @@ window.__ModuleLoader__.load({
 
         ctx.inject(['uiWorkspace'], (child) => {
           services.workspace = child.get('uiWorkspace') ?? child.uiWorkspace ?? null
+        })
+
+        // 客户端会话列表本体（ISessions）：打开会话前先确认这条 id 已经在列表快照里。
+        ctx.inject(['sessions'], (child) => {
+          services.sessions = child.get('sessions') ?? child.sessions ?? null
         })
 
         ctx.slots.inject('main', () => ctx.slots.register({

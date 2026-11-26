@@ -59,7 +59,7 @@ if (status.status === 0) {
 }
 const config = status.body?.config ?? {}
 record('状态可读', status.status === 200, `status=${status.status}`)
-record('版本 0.9.8', config.version === '0.9.8', `version=${config.version}`)
+record('版本 0.9.9', config.version === '0.9.9', `version=${config.version}`)
 record(
   '单会话默认 preset=dsh-superagent-yh-dispatcher',
   config.singleSession?.preset === 'dsh-superagent-yh-dispatcher',

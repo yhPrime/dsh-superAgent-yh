@@ -2,6 +2,20 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { createDelegate } from '../../lib/delegate.js'
+import { archiveChildSession } from '../../lib/child-archive.js'
+
+test('D52：归档幂等——已经归档过的子会话不再重复打宿主、不重复刷日志', async () => {
+  const calls = { archives: 0, logs: [] }
+  const state = {}
+  const save = () => { calls.saved = (calls.saved ?? 0) + 1 }
+  const archive = async () => { calls.archives += 1 }
+  const deps = { state, save, archive, log: (line) => calls.logs.push(line) }
+  assert.equal(await archiveChildSession(deps, 'child-9', 'idle'), true)
+  assert.equal(await archiveChildSession(deps, 'child-9', 'idle'), true)
+  assert.equal(calls.archives, 1)
+  assert.equal(calls.logs.length, 1)
+  assert.equal(state.singleSessionChildArchived['child-9'] > 0, true)
+})
 
 function harness({ childId = 'child-1', archiveError = null, config: configPatch = {}, roles = undefined } = {}) {
   const calls = { activations: [], archives: [], logs: [] }

@@ -43,8 +43,9 @@ function harness({
   renameNormalize = (title) => title, renameNoReturn = false, applyRename = true,
   children = [], childRecords = {}, childArchiveError = null, childReadError = null,
   presetId = 'standard', useRealCompaction = false, compactionEngine = null,
+  unarchiveError = null,
 } = {}) {
-  const calls = { pin: 0, unpin: 0, archive: 0, archiveChild: 0, compact: 0, selected: [], rename: 0, titles: [], accepted: [], relay: [], childReads: [], logs: [] }
+  const calls = { pin: 0, unpin: 0, archive: 0, archiveChild: 0, unarchive: 0, compact: 0, selected: [], rename: 0, titles: [], accepted: [], relay: [], childReads: [], logs: [] }
   const store = { state: { singleSessions: {}, singleSession: {}, lastError: null }, save() {} }
   const config = normalizeConfig({ ...configPatch, singleSession: { enabled, idleMinutes: 30, pressureRatio: 0.5, ...(configPatch.singleSession ?? {}) } })
   const agent = { session: {} }
@@ -79,6 +80,7 @@ function harness({
       pinSession: async () => { if (pinError) throw new Error(pinError); calls.pin += 1 },
       unpinSession: async () => { calls.unpin += 1 },
       archiveSession: async () => { calls.archive += 1 },
+      unarchiveSession: async () => { if (unarchiveError) throw new Error(unarchiveError); calls.unarchive += 1 },
       archiveChild: async (sessionId) => {
         if (childArchiveError) throw new Error(childArchiveError)
         calls.archiveChild += 1
@@ -323,6 +325,32 @@ test('onPresetSelected：未登记/同 preset 不动；空会话被改回默认 
   const skip = await started.maintainer.onPresetSelected('s1', 'ptc')
   assert.equal(skip.ignored, 'started')
   assert.deepEqual(started.calls.selected, [])
+})
+
+test('onArchived：已登记的单会话被归档就拉回来；未登记/未开启不动；失败只记日志', async () => {
+  const h = harness()
+  await h.maintainer.register('s1')
+  const out = await h.maintainer.onArchived({ sessionId: 's1' })
+  assert.deepEqual(out, { ok: true, restored: true })
+  assert.equal(h.calls.unarchive, 1)
+  assert.ok(h.calls.logs.some((line) => line.includes('archived registered session restored')))
+
+  // 事件也可能直接传 id 字符串。
+  assert.deepEqual(await h.maintainer.onArchived('s1'), { ok: true, restored: true })
+  assert.equal(h.calls.unarchive, 2)
+
+  assert.equal((await h.maintainer.onArchived({ sessionId: 'other' })).ignored, 'not-registered')
+  assert.equal((await h.maintainer.onArchived({})).ignored, 'no-session')
+
+  const off = harness({ enabled: false })
+  assert.equal((await off.maintainer.onArchived({ sessionId: 's1' })).ignored, 'disabled')
+  assert.equal(off.calls.unarchive, 0)
+
+  const bad = harness({ unarchiveError: 'workspace/write-failed' })
+  await bad.maintainer.register('s1')
+  const failed = await bad.maintainer.onArchived({ sessionId: 's1' })
+  assert.deepEqual(failed, { ok: false, ignored: 'error' })
+  assert.ok(bad.calls.logs.some((line) => line.includes('restore archived session')))
 })
 
 test('标题：59 字节按 UTF-8 安全截断，不切半个中文', () => {

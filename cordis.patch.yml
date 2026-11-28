@@ -1,22 +1,139 @@
-# dsh-superAgent-yh 自制版 bundle 层：
-# 1) 插件行（配置留空走默认：dryRun=true、三个源全关）；
-# 2) worker preset（执行器 Session 专用，精简工具集，不供手动选择）。
+# dsh-superagent-yh bundle layer: inserts the plugins without configuration, and the agent presets its Sessions run under. The
+# profile supplies the `dsh-superagent-yh` entry's stateDir (see docs/006-deployment.md and examples/profile.cordis.patch.yml); the plugin
+# refuses to start without stateDir.
 - insert:
     - id: dsh-superagent-yh
       name: dsh-superagent-yh
-      config: {}
+    - id: dsh-superagent-yh-github
+      name: dsh-superagent-yh/github-watch
+    # Optional Feishu Source; requires configuring a bot CLI after enabling.
+    - id: dsh-superagent-yh-feishu
+      name: dsh-superagent-yh/feishu-watch
+      disabled: true
+    # Optional QQ Source (OneBot v11 or roost-host); requires configuring its connection after enabling.
+    - id: dsh-superagent-yh-qq
+      name: dsh-superagent-yh/qq-watch
+      disabled: true
+    # The agent preset of every Executor Session (WORKER_PRESET in src/app/sessions.ts); the main Session has its own, below.
+    # It is DSH's `standard` preset with only what a worker needs, and a shell whose foreground command moves to a background job
+    # after 5 seconds, so a long command does not hold back a person's message, which the Session takes at its next step. Left
+    # out: questions to a person, presenting, plan mode, the plugin manager and market, scheduling, goals, workflows, web fetch,
+    # and forked subagents, which would run under this preset; spawned subagents run under `standard`, whose shell moves a
+    # command to a background job only after 60 seconds, as a subagent's jobs are killed when it ends. A preset row has no
+    # setting that hides it from the preset picker, so its name and description say whom it is for.
     - id: dsh-superagent-yh-worker-preset
       name: '@deepseek-ai/dsh-agent-preset'
       config:
         id: dsh-superagent-yh-worker
-        name: dsh-superAgent-yh 执行器
-        description: dsh-superAgent-yh 的执行器 Session 专用，不供手动选择。前台命令超 5 秒转入后台，只含执行工单所需的工具。
+        name: dsh-superagent-yh 执行器
+        description: dsh-superagent-yh 的执行器 Session 专用，不供手动选择。前台命令超 5 秒转入后台，只含执行工作所需的工具。
         order: 90
         plugins:
           - id: persona
             name: '@deepseek-ai/dsh-persona'
             config:
               prefix: You are a coding agent powered by the {{model}} model.
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          # A foreground command waits at most 5 s, then the shell tool moves it to a background job.
+          - id: shell
+            name: cordis:group
+            group: true
+            isolate:
+              shell: true
+            config:
+              - id: bash-sandbox
+                name: '@deepseek-ai/dsh-bash-sandbox'
+                disabled: !!js process.platform === 'win32'
+                config:
+                  timeoutMs: 5000
+                  maxTimeoutMs: 5000
+              - id: pwsh-sandbox
+                name: '@deepseek-ai/dsh-pwsh-sandbox'
+                disabled: !!js process.platform !== 'win32'
+                config:
+                  timeoutMs: 5000
+                  maxTimeoutMs: 5000
+              - id: tool-bash
+                name: '@deepseek-ai/dsh-tool-bash'
+                disabled: !!js process.platform === 'win32'
+              - id: tool-pwsh
+                name: '@deepseek-ai/dsh-tool-pwsh'
+                disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          # A wait for a job ends after 5 s too; the job's end wakes the worker with its result.
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+            config:
+              waitTimeoutMs: 5000
+              maxWaitTimeoutMs: 5000
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
+          - id: delegation
+            name: cordis:group
+            group: true
+            isolate:
+              workflowEngine: true
+            config:
+              - id: tool-subagent-control
+                name: '@deepseek-ai/dsh-tool-subagent-control'
+              - id: tool-subagent
+                name: '@deepseek-ai/dsh-tool-subagent'
+                config:
+                  provider: spawn
+                  toolName: subagent
+                  modelSelection: true
+                  modelDiscovery: true
+                  agentPreset: standard
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              fetch: false
+              searchTimeoutMs: 60000
+    # The agent preset of the main Session (ROUTER_PRESET in src/app/sessions.ts). The worker's 5-second shell and job waits, so a command or a wait does not hold back the next candidates, and
+    # only what the main Session uses: no subagents, web, file search or writes, todo list, questions to a person, presenting,
+    # plan mode, plugin manager, scheduling, goals or workflows. No persona: the main Session's prompt is complete, so it has
+    # no other section.
+    - id: dsh-superagent-yh-router-preset
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: dsh-superagent-yh-router
+        name: dsh-superagent-yh 主 Session
+        description: dsh-superagent-yh 的主 Session 专用，不供手动选择。前台命令和任务等待超 5 秒转入后台，只含路由所需的工具。
+        order: 91
+        plugins:
           - id: agent-instructions
             name: '@deepseek-ai/dsh-agent-instructions'
             config:
@@ -49,10 +166,9 @@
                 disabled: !!js process.platform !== 'win32'
           - id: tool-fs
             name: '@deepseek-ai/dsh-tool-fs'
-          - id: tool-fs-search
-            name: '@deepseek-ai/dsh-tool-fs-search'
             config:
-              sampleOverCapGlobResults: false
+              write: false
+              edit: false
           - id: tool-jobs
             name: '@deepseek-ai/dsh-tool-jobs'
             config:
@@ -62,21 +178,6 @@
             name: '@deepseek-ai/dsh-skill-filesystem'
           - id: tool-skill
             name: '@deepseek-ai/dsh-tool-skill'
-          - id: tool-todo
-            name: '@deepseek-ai/dsh-tool-todo'
-            config:
-              allowParallelInProgress: true
-          # 第三层：worker 可以再派子代理（orchestrator → worker → subagent）。
-          - id: tool-subagent
-            name: '@deepseek-ai/dsh-tool-subagent'
-            config:
-              provider: spawn
-              toolName: subagent
-          - id: tool-subagent-fork
-            name: '@deepseek-ai/dsh-tool-subagent'
-            config:
-              provider: fork
-              toolName: subagent_fork
           - id: compaction
             name: cordis:group
             group: true
@@ -94,62 +195,3 @@
                   thresholdChars: 8192
                   headChars: 4096
                   tailChars: 1024
-              # D48：把本组隔离 realm 里的 compaction 服务按 preset 登记给单会话维护器。
-              - id: compaction-bridge
-                name: dsh-superagent-yh/compaction-bridge
-                config:
-                  preset: dsh-superagent-yh-worker
-    # 单会话「纯调度」preset（D30）：只留调度 persona、派活工具和压缩；
-    # dispatcher 守卫把 profile 级全局工具（ops_bash/exp_recall 等）在本会话隐藏。
-    - id: dsh-superagent-yh-dispatcher-preset
-      name: '@deepseek-ai/dsh-agent-preset'
-      config:
-        id: dsh-superagent-yh-dispatcher
-        name: dsh-superAgent-yh 调度者
-        description: dsh-superAgent-yh 单会话专用：只负责接任务、派 worker、汇总回报，不自己动手。
-        order: 91
-        plugins:
-          - id: persona
-            name: '@deepseek-ai/dsh-persona'
-            config:
-              prefix: |-
-                You are the dispatcher of this workspace's Superagent session. You never do the work yourself: you have no shell, file, search, or editing tools.
-                When the user asks for real work, delegate it with the `delegate` tool. Write a complete, self-contained task prompt (absolute workspace path, what to do, how to verify). Use one delegate call per independent piece so they run in parallel.
-                Permanent roles: when the same kind of work has already happened twice (or keeps demanding the same files and rules), pass a stable `role` name to `delegate` — the plugin keeps one long-lived session per role, reusing its memory. Look at the current role list first; reuse a name instead of inventing a twin. Never create a role just to park a task.
-                Concurrency: at most 6 temporary workers run at once; extra calls are queued by the plugin, so keep calling `delegate` instead of retrying yourself.
-                Never spawn a placeholder or "wait for it" subagent, and never poll: delegating ends your turn. Afterwards summarize each worker's report in two or three sentences: what changed, where, and what is still open. Answer small talk directly. Reply in the user's language.
-          - id: compaction
-            name: cordis:group
-            group: true
-            isolate:
-              compaction: true
-              toolResultPruner: true
-            config:
-              - id: compaction-basic
-                name: '@deepseek-ai/dsh-compaction-basic'
-              - id: command-compact
-                name: '@deepseek-ai/dsh-command-compact'
-              - id: tool-result-pruner
-                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
-                config:
-                  thresholdChars: 8192
-                  headChars: 4096
-                  tailChars: 1024
-              # D48：dispatcher preset 也要按 preset 登记自己的 compaction 服务。
-              - id: compaction-bridge
-                name: dsh-superagent-yh/compaction-bridge
-                config:
-                  preset: dsh-superagent-yh-dispatcher
-          # 派活工具 `delegate` 由插件全局注册；守卫必须放行它，只藏其余全局工具。
-          - id: dispatcher-guard
-            name: dsh-superagent-yh/dispatcher
-            config:
-              keep:
-                - delegate
-                - superagent_status
-                - compress
-                - decompress
-                - search_context
-                - acp_status
-                - acp_cache
-                - acp_read_original_image

@@ -1,62 +1,67 @@
 # SETUP：装到本机 DSH
 
-> 适用于 Desktop 安装版（profile 由应用管理）。自定义 profile 可直接用 CLI。
+适用于 Desktop 安装版；自定义 profile 直接用 CLI 也一样。
 
 ## 1 准备
 
-- DSH `>=0.2.2-rc.5 <0.3.0`
-- 一个本地 git 克隆（worker 会从它 `git worktree` 检出）
-- 可选：GitHub token（private 仓库或提高限额）、飞书应用 appId/appSecret
+- DSH `>=0.2.2-rc.5 <0.3.0`，Node `^22.19` 或 `>=24`
+- git；worker 的 `prepare` 命令会用到
+- 想接 GitHub：一个能用的 `gh`（或用 agent 账号的 `gh` 包装）
+- 想接飞书：`lark-cli` 与自建应用凭证
+- 想接 QQ：一台 OneBot v11 网关，或 roost-host 服务与 token
 
-## 2 安装插件
-
-本地目录：
+## 2 安装
 
 ```powershell
 & "<DSH 安装目录>\resources\runtime\cli\bin\dsh.cmd" plugin --profile <profile> add "C:\path\to\dsh-superAgent-yh"
 ```
 
-或打好的 tgz：
-
-```powershell
-& "<DSH 安装目录>\resources\runtime\cli\bin\dsh.cmd" plugin --profile <profile> add "C:\path\to\dsh-superagent-yh-0.1.0.tgz"
-```
-
-装完在 DSH **插件**页确认 `dsh-superAgent-yh` 行存在；重载宿主。
+装完在 DSH **插件**页确认有 `dsh-superAgent-yh` 行，然后重启一次宿主。
 
 ## 3 写配置
 
-在 `$DSH_HOME/profiles/<profile>/cordis.patch.yml` 追加：
+在 `$DSH_HOME/profiles/<profile>/cordis.patch.yml` 写插件行（`stateDir` 必填，必须绝对路径）：
 
 ```yaml
 - id: dsh-superagent-yh
-  name: dsh-superagent-yh
   config:
-    dryRun: true
-    repoPath: C:/path/to/local-repo
-    mainSessionId: ""
-    sources:
-      github:
-        enabled: true
-        repo: owner/name
-        authors: [your-login]
+    stateDir: C:/Users/you/.dsh/state/superagent
 ```
 
-先保持 `dryRun: true` 跑一轮。
+用飞书或 QQ 时，再把对应的插件行打开：
 
-## 4 验收
+```yaml
+- id: dsh-superagent-yh-feishu
+  disabled: false
+- id: dsh-superagent-yh-qq
+  disabled: false
+```
 
-1. 重启一次 DSH（客户端模块需要重启加载）；左侧栏应出现 **Superagent** 图标，点击打开主面板；右侧栏（若装 better-sidebar）有同名页签；
-2. 主面板/右页签都能关闭：主面板右上「关闭」返回会话，右页签有原生关闭与体内「关闭」；
-3. 在源里造一条符合条件的事件，等一个轮询周期，控制台应出现 `queued` 工单（dryRun 下不会真跑）；
-4. 把 `dryRun` 改 false、`mainSessionId` 填一个已存在的会话（或留空只看控制台）；
-5. 再触发一次：控制台出现 `running`，worker 会话 `worker-<id>` 出现，worktree 在 `<stateDir>/work/<id>`；
-6. 完成后 `done`，主线收到「开工/完成」两条消息（需要人时多一条）；
-7. 失败工单可点「重试」，进行中可「取消」，有会话的可「会话」打开，任何工单可看「日志」。
+## 4 配来源
 
-## 5 排查
+重启后打开 **Superagent** 面板：
 
-- 面板「最后错误」或 `state.json` 的 `lastError`；
-- `<stateDir>/logs/<ticketId>.log` 每个工单的执行日志；
-- `worker-<id>` 会话日志：`~/.dsh/sessions/<cwd编码>/worker-<id>/session.v4.jsonl.zstd`（可用 `test/tools/dump-session.mjs` 解码）；
-- 配置不合法时插件会带着明确错误启动失败（fail-closed），先看宿主日志里的 `ConfigError`。
+1. **Settings → Sources**：GitHub 填 `owner/name` 与 agent 的 `gh` 路径；飞书填 bot 的 `lark-cli`、要听的群和私聊开关；QQ 填通道与网关地址（字段见 README「QQ」）。
+2. **Policy**：在对应来源下加允许发单的账号；QQ 群里的 @、私聊里的直接请求才会变成工单。
+3. **Execution**：填工单目录根和 `prepare` 命令，例如：
+
+   ```sh
+   git -C /home/me/src/widgets fetch --no-tags "https://github.com/$DSH_SUPERAGENT_GITHUB_REPOSITORY.git" "${DSH_SUPERAGENT_GITHUB_PR_HEAD:-HEAD}:refs/dsh-superagent-yh/$DSH_SUPERAGENT_TICKET" &&
+   git -C /home/me/src/widgets worktree add -b "agent/$DSH_SUPERAGENT_NAME" "$DSH_SUPERAGENT_DIR" "refs/dsh-superagent-yh/$DSH_SUPERAGENT_TICKET"
+   ```
+
+只用 QQ 时，第 1 步把 GitHub 来源关掉即可，部署检查不再要求 repository 与 GitHub CLI。
+
+## 5 验收
+
+1. Overview 无 setup 问题，各 health 条目为 ready（或来源暂未启动）；
+2. 在 QQ 群里 @ 机器人一句请求，或在 GitHub/飞书来源造一条允许的人发的事件；
+3. 面板 Trigger 出现记录，Eval 通过后出现 Ticket；接受后 worker 会话 `worker-<id>` 出现；
+4. 完成后 Ticket 结束，消息回到原群/原会话；
+5. 重启宿主后再触发同一条消息，不应重复建单。
+
+## 6 排查
+
+- Overview 的 setup/health 条目指出问题所在，Settings 里改完会自动重跑部署检查；
+- 日志在 `<stateDir>` 下；
+- 强制结束宿主后马上重启可能遇到 `Lock file is already being held`：等 30 秒或删掉 `<stateDir>.lock` 目录。

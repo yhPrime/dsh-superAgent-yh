@@ -1,44 +1,59 @@
 {
   "name": "dsh-superagent-yh",
-  "version": "0.9.11",
+  "version": "1.0.0",
   "private": true,
-  "description": "dsh-superAgent-yh 自制版：每个工单在独立会话与独立目录执行，主线只收三条短消息。",
+  "description": "超级智能体（dsh-superagent-yh）：以官方 dsh-superagent 为基线的 DSH bundle——监听来源（GitHub / 飞书 / QQ）、按 Policy 评估、为每条授权工单开独立 Session 执行；含汉化面板。",
   "type": "module",
   "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "exports": {
-    "./dispatcher": "./lib/dispatcher.js",
-    "./compaction-bridge": "./lib/compaction-bridge.js",
-    ".": "./lib/index.js",
-    "./client": "./client.js",
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./github-watch": "./lib/github-watch.js",
+    "./feishu-watch": "./lib/feishu-watch.js",
+    "./qq-watch": "./lib/qq-watch.js",
+    "./package.json": "./package.json",
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "SETUP.md",
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.md",
+    "prompts",
+    "skills"
+  ],
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
     "client": {
       "platform": "web",
-      "immediately": true,
       "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-ui-sidebar",
-        "@deepseek-ai/dsh-client-ui-sidebar-right"
+        "@deepseek-ai/dsh-client-ui-workspace"
       ]
-    }
+    },
+    "manifestVersion": 1
   },
-  "files": [
-    "lib",
-    "client.js",
-    "cordis.patch.yml",
-    "locale/*.json",
-    "docs",
-    "icon.svg",
-    "README.md",
-    "SETUP.md",
-    "LICENSE",
-    "THIRD-PARTY-NOTICES.md"
-  ],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "tsc --noEmit && vitest run && tsdown"
+  },
   "engines": {
     "node": "^22.19.0 || >=24.0.0",
     "dsh": ">=0.2.2-rc.5 <0.3.0"
@@ -47,5 +62,74 @@
     "type": "git",
     "url": "https://github.com/yhPrime/dsh-superAgent-yh.git"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "proper-lockfile": "4.1.2",
+    "zod": "4.4.3"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "4.0.5-alpha.1",
+    "@deepseek-ai/dsh-agent": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-api-session-controller": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-locale": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-layout": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-sidebar": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-workspace": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-host-webserver": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-llm": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-permission-presets": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-scope": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-session": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-session-persistence": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-system-prompt": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-tools": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-workspace": "^0.2.1-alpha.2",
+    "@deepseek-ai/schemastery": "3.18.5-alpha.1",
+    "@deepseek-ai/dsh-skill": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-attachment": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.2.1-alpha.2",
+    "@deepseek-ai/dsh-subprocess": "^0.2.1-alpha.2"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.5-alpha.1",
+    "@deepseek-ai/dsh-agent": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-api-session-controller": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-locale": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-settings": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-plugin-manager": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-layout": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-sidebar": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-workspace": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-host-webserver": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-llm": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-permission-presets": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-scope": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-session": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-session-persistence": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-settings": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-system-prompt": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-tools": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-workspace": "0.2.1-alpha.2",
+    "@deepseek-ai/schemastery": "3.18.5-alpha.1",
+    "@types/jsdom": "28.0.3",
+    "@types/node": "22.20.0",
+    "@types/proper-lockfile": "4.1.4",
+    "@types/react": "18.3.28",
+    "jsdom": "29.1.1",
+    "react": "18.3.1",
+    "tsdown": "0.22.14",
+    "typescript": "6.0.3",
+    "vitest": "4.1.8",
+    "@deepseek-ai/dsh-skill": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-attachment": "0.2.1-alpha.2",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.1-alpha.2",
+    "react-dom": "18.3.1",
+    "@types/react-dom": "18.3.7",
+    "@deepseek-ai/dsh-subprocess": "0.2.1-alpha.2"
+  },
+  "packageManager": "pnpm@11.7.0",
+  "author": "DeepSeek Harness Team <team@dsh.dev>"
 }

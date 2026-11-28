@@ -1,8 +1,0 @@
-# M0 探针 bundle：只在测试 profile 里安装，验证完即移除。
-- insert:
-    - id: dsh-superagent-yh-probe
-      name: dsh-superagent-yh-probe
-      config:
-        workspaceDir: C:\Users\yh\WorkDeepSeek\插件\dsh-superAgent-yh
-        evidenceDir: C:\Users\yh\WorkDeepSeek\插件\dsh-superAgent-yh\归档\过程\M0
-        delayMs: 2000

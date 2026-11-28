@@ -1,7 +1,6 @@
 {
   "meta": {
-    "title": "dsh-superAgent-yh",
-    "description": "Runs each ticket in its own session and directory; the main session receives three short messages: started, needs human, done.",
-    "detail": "README.md"
+    "title": "Superagent",
+    "description": "Watch one GitHub repository, turn authorized requests into Tickets, and execute each in its own DSH Session."
   }
 }
